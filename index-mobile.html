@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Mobile Pro</title>
+    <title>Baklava Shooter - Left Hand Fire</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -17,17 +17,18 @@
         #gameCanvas { display: block; }
         
         #ui {
-            position: absolute; top: 10px; left: 10px; color: #fff;
+            position: absolute; top: 10px; right: 10px; text-align: right; color: #fff;
             font-size: 18px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
             z-index: 10; pointer-events: none;
         }
 
+        /* Fire Button moved to the Left */
         #fireBtn { 
-            position: absolute; bottom: 40px; right: 25px; 
-            width: 90px; height: 90px; border-radius: 50%;
+            position: absolute; bottom: 40px; left: 25px; 
+            width: 95px; height: 95px; border-radius: 50%;
             background: rgba(255, 68, 68, 0.5); border: 3px solid rgba(255,255,255,0.4);
             display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 20px; font-weight: bold; user-select: none; z-index: 15;
+            color: white; font-size: 22px; font-weight: bold; user-select: none; z-index: 15;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -99,6 +100,7 @@
 
         const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 7, walkCycle: 0 };
 
+        // Handle touches (ignore touches on the fire button)
         canvas.addEventListener('touchstart', handleTouch, {passive: false});
         canvas.addEventListener('touchmove', handleTouch, {passive: false});
         canvas.addEventListener('touchend', () => {
@@ -110,9 +112,7 @@
             e.preventDefault();
             const touch = e.touches[0];
             
-            // Increased sensitivity: deadzone reduced to 20
             const deadzone = 20; 
-
             const dx = touch.clientX - player.x;
             const dy = touch.clientY - player.y;
 
@@ -123,7 +123,7 @@
         }
 
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
+            e.stopPropagation(); // Stop touch from triggering movement
             if (gameRunning) shootBaklava();
         });
 
@@ -153,7 +153,6 @@
             const centerY = y + size / 2;
             const radius = size / 2.3;
             
-            // Bomb Body Gradient
             let grad = ctx.createRadialGradient(centerX - radius/3, centerY - radius/3, radius/10, centerX, centerY, radius);
             grad.addColorStop(0, '#444');
             grad.addColorStop(1, '#000');
@@ -161,14 +160,12 @@
             ctx.fillStyle = grad;
             ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2); ctx.fill();
             
-            // Fuse
             ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(centerX, centerY - radius);
             ctx.quadraticCurveTo(centerX + 10, centerY - radius - 15, centerX + 18, centerY - radius - 8);
             ctx.stroke();
 
-            // Sparkle effect
             const sparkColor = Math.random() > 0.5 ? '#fff' : '#ffea00';
             ctx.fillStyle = sparkColor;
             ctx.beginPath(); 
@@ -231,7 +228,8 @@
                 bomb.y += bomb.speed;
                 if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 &&
                     bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
-                    // Massive Fail Explosion
+                    // Fail Vibration (Android)
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 200]);
                     createExplosion(player.x, player.y, '#ff4400', 50, 20);
                     createExplosion(player.x, player.y, '#ffffff', 20, 15);
                     gameOver();
