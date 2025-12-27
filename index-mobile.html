@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Character Joystick</title>
+    <title>Baklava Shooter - Mobile Pro</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -24,10 +24,10 @@
 
         #fireBtn { 
             position: absolute; bottom: 40px; right: 25px; 
-            width: 85px; height: 85px; border-radius: 50%;
-            background: rgba(255, 68, 68, 0.4); border: 2px solid rgba(255,255,255,0.3);
+            width: 90px; height: 90px; border-radius: 50%;
+            background: rgba(255, 68, 68, 0.5); border: 3px solid rgba(255,255,255,0.4);
             display: flex; align-items: center; justify-content: center;
-            color: white; font-weight: bold; user-select: none; z-index: 15;
+            color: white; font-size: 20px; font-weight: bold; user-select: none; z-index: 15;
             -webkit-tap-highlight-color: transparent;
         }
 
@@ -38,8 +38,8 @@
             border: 4px solid #ff4444; width: 85%;
         }
         #gameOver button {
-            margin-top: 20px; padding: 12px 25px; font-size: 18px; cursor: pointer;
-            background: #ff4444; color: #fff; border: none; border-radius: 8px;
+            margin-top: 20px; padding: 15px 30px; font-size: 20px; cursor: pointer;
+            background: #ff4444; color: #fff; border: none; border-radius: 10px;
         }
     </style>
 </head>
@@ -77,15 +77,15 @@
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            window.scrollTo(0, 0);
+            window.scrollTo(0, 0); 
         }
         window.addEventListener('resize', resize);
-        window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+        window.addEventListener('orientationchange', () => setTimeout(resize, 300));
         resize();
 
         let gameRunning = true;
         let score = 0;
-        let keys = {};
+        let keys = {w:false, a:false, s:false, d:false};
         let bombs = [];
         let baklavas = [];
         let particles = [];
@@ -99,11 +99,10 @@
 
         const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 7, walkCycle: 0 };
 
-        // --- NEW CHARACTER JOYSTICK LOGIC ---
-        canvas.addEventListener('touchstart', handleTouch);
-        canvas.addEventListener('touchmove', handleTouch);
+        canvas.addEventListener('touchstart', handleTouch, {passive: false});
+        canvas.addEventListener('touchmove', handleTouch, {passive: false});
         canvas.addEventListener('touchend', () => {
-            keys['a'] = false; keys['d'] = false; keys['w'] = false; keys['s'] = false;
+            keys.a = keys.d = keys.w = keys.s = false;
         });
 
         function handleTouch(e) {
@@ -111,17 +110,16 @@
             e.preventDefault();
             const touch = e.touches[0];
             
-            // "Sensitivity" / Deadzone: Higher number = Less sensitive
-            // Character only moves if your finger is more than 30 pixels away from its center
-            const deadzone = 30; 
+            // Increased sensitivity: deadzone reduced to 20
+            const deadzone = 20; 
 
             const dx = touch.clientX - player.x;
             const dy = touch.clientY - player.y;
 
-            keys['a'] = dx < -deadzone;
-            keys['d'] = dx > deadzone;
-            keys['w'] = dy < -deadzone;
-            keys['s'] = dy > deadzone;
+            keys.a = dx < -deadzone;
+            keys.d = dx > deadzone;
+            keys.w = dy < -deadzone;
+            keys.s = dy > deadzone;
         }
 
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
@@ -131,20 +129,21 @@
 
         function shootBaklava() {
             if (ammo > 0) {
-                baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 50 });
+                baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 45 });
                 ammo--;
                 document.getElementById('ammo').textContent = ammo;
             }
         }
 
-        function createExplosion(x, y, color) {
-            for (let i = 0; i < 12; i++) {
+        function createExplosion(x, y, color, count = 15, speed = 10) {
+            for (let i = 0; i < count; i++) {
                 particles.push({
                     x: x, y: y,
-                    vx: (Math.random() - 0.5) * 8,
-                    vy: (Math.random() - 0.5) * 8,
-                    life: 25,
-                    color: color
+                    vx: (Math.random() - 0.5) * speed,
+                    vy: (Math.random() - 0.5) * speed,
+                    life: 30 + Math.random() * 20,
+                    color: color,
+                    size: 2 + Math.random() * 4
                 });
             }
         }
@@ -153,29 +152,44 @@
             const centerX = x + size / 2;
             const centerY = y + size / 2;
             const radius = size / 2.3;
-            ctx.fillStyle = '#000';
+            
+            // Bomb Body Gradient
+            let grad = ctx.createRadialGradient(centerX - radius/3, centerY - radius/3, radius/10, centerX, centerY, radius);
+            grad.addColorStop(0, '#444');
+            grad.addColorStop(1, '#000');
+            
+            ctx.fillStyle = grad;
             ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 2;
+            
+            // Fuse
+            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(centerX, centerY - radius);
-            ctx.quadraticCurveTo(centerX + 5, centerY - radius - 8, centerX + 10, centerY - radius - 3);
+            ctx.quadraticCurveTo(centerX + 10, centerY - radius - 15, centerX + 18, centerY - radius - 8);
             ctx.stroke();
+
+            // Sparkle effect
+            const sparkColor = Math.random() > 0.5 ? '#fff' : '#ffea00';
+            ctx.fillStyle = sparkColor;
+            ctx.beginPath(); 
+            ctx.arc(centerX + 18, centerY - radius - 8, 3 + Math.random() * 3, 0, Math.PI * 2); 
+            ctx.fill();
         }
 
         function drawStickman(x, y) {
-            const headSize = 50;
-            const isMoving = keys['a'] || keys['d'] || keys['w'] || keys['s'];
+            const headSize = 45;
+            const isMoving = keys.a || keys.d || keys.w || keys.s;
             player.walkCycle += isMoving ? 0.2 : 0;
             const legSwing = Math.sin(player.walkCycle) * 15;
 
             ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
             if (headLoaded) ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
             ctx.beginPath();
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 60);
-            ctx.moveTo(x, y + 40); ctx.lineTo(x - 20, y + 50 + legSwing);
-            ctx.moveTo(x, y + 40); ctx.lineTo(x + 20, y + 50 - legSwing);
-            ctx.moveTo(x, y + 60); ctx.lineTo(x - 12, y + 85 + legSwing);
-            ctx.moveTo(x, y + 60); ctx.lineTo(x + 12, y + 85 - legSwing);
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55);
+            ctx.moveTo(x, y + 40); ctx.lineTo(x - 18, y + 48 + legSwing);
+            ctx.moveTo(x, y + 40); ctx.lineTo(x + 18, y + 48 - legSwing);
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 10, y + 80 + legSwing);
+            ctx.moveTo(x, y + 55); ctx.lineTo(x + 10, y + 80 - legSwing);
             ctx.stroke();
         }
 
@@ -185,19 +199,20 @@
             
             if (totalFrames % 60 === 0) {
                 secondsElapsed++;
+                if (secondsElapsed % 20 === 0 && currentMultiplier < 3.5) currentMultiplier += 0.4;
                 if (secondsElapsed % 4 === 0) {
                     ammo++;
                     document.getElementById('ammo').textContent = ammo;
                 }
             }
 
-            if (keys['a'] && player.x > 30) player.x -= player.speed;
-            if (keys['d'] && player.x < canvas.width - 30) player.x += player.speed;
-            if (keys['w'] && player.y > 30) player.y -= player.speed;
-            if (keys['s'] && player.y < canvas.height - 150) player.y += player.speed;
+            if (keys.a && player.x > 30) player.x -= player.speed;
+            if (keys.d && player.x < canvas.width - 30) player.x += player.speed;
+            if (keys.w && player.y > 30) player.y -= player.speed;
+            if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
             if (totalFrames % Math.max(1, Math.floor(baseSpawnRate / currentMultiplier)) === 0) {
-                const size = 35 + Math.random() * 25;
+                const size = 30 + Math.random() * 20;
                 bombs.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size, speed: baseSpeed * currentMultiplier });
             }
 
@@ -205,7 +220,7 @@
                 b.y -= b.speed;
                 bombs.forEach((bomb, mi) => {
                     if (b.x - b.size/2 < bomb.x + bomb.width && b.x + b.size/2 > bomb.x && b.y - b.size/2 < bomb.y + bomb.height && b.y + b.size/2 > bomb.y) {
-                        createExplosion(bomb.x + bomb.width/2, bomb.y + bomb.height/2, '#FFD700');
+                        createExplosion(bomb.x + bomb.width/2, bomb.y + bomb.height/2, '#FFD700', 15, 8);
                         bombs.splice(mi, 1); baklavas.splice(bi, 1);
                         score += 100;
                     }
@@ -214,9 +229,11 @@
 
             bombs.forEach((bomb, i) => {
                 bomb.y += bomb.speed;
-                if (bomb.x < player.x + 20 && bomb.x + bomb.width > player.x - 20 &&
-                    bomb.y < player.y + 60 && bomb.y + bomb.height > player.y - 20) {
-                    createExplosion(player.x, player.y, '#f00');
+                if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 &&
+                    bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
+                    // Massive Fail Explosion
+                    createExplosion(player.x, player.y, '#ff4400', 50, 20);
+                    createExplosion(player.x, player.y, '#ffffff', 20, 15);
                     gameOver();
                 }
                 if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
@@ -236,8 +253,8 @@
             bombs.forEach(b => drawBomb(b.x, b.y, b.width));
             baklavas.forEach(b => { if (baklavaLoaded) ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size); });
             particles.forEach(p => {
-                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 25;
-                ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 50;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
             });
             ctx.globalAlpha = 1.0;
         }
@@ -252,7 +269,7 @@
         }
 
         function restartGame() {
-            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; ammo = 3;
+            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; currentMultiplier = 1; ammo = 3;
             bombs = []; baklavas = []; particles = [];
             player.x = canvas.width / 2; player.y = canvas.height / 2;
             document.getElementById('ammo').textContent = ammo;
