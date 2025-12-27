@@ -1,0 +1,249 @@
+If you renamed the file to index-mobile.html, GitHub Pages might not display it automatically when you go to your main link. GitHub specifically looks for a file named index.html to start the website.
+
+To fix this and keep your new code, you have two choices:
+
+Option 1: Rename it back (Recommended)
+Rename index-mobile.html back to index.html on GitHub. This is the easiest way to make sure your link works instantly.
+
+Option 2: Use the specific link
+If you want to keep the name as is, your website link will change to: https://guykoren188-web.github.io/Ben-Gvir-Baklava-Shooter/index-mobile.html
+
+The Final "Action Pack" Code
+I have made the baklava travel faster so you can hit those Stage 4 bombs more easily. I also added a small visual pulse to the ammo counter so you can see exactly when your 4-second recharge finishes.
+
+HTML
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Baklava Shooter - Mobile Action</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
+        body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1410; }
+        #gameCanvas { display: block; }
+        
+        #ui {
+            position: absolute; top: 10px; left: 10px; color: #fff;
+            font-size: 18px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+            z-index: 10; pointer-events: none;
+        }
+
+        #ammoBox { transition: transform 0.1s; }
+        .pulse { transform: scale(1.2); color: #00ff00 !important; }
+
+        .touch-btn {
+            position: absolute; bottom: 40px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255,255,255,0.3);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; user-select: none; z-index: 15;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #fireBtn { right: 25px; width: 75px; height: 75px; background: rgba(255, 68, 68, 0.4); }
+        #joystick { left: 25px; width: 90px; height: 90px; font-size: 12px; }
+
+        #gameOver {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: #fff; font-size: 28px; display: none;
+            z-index: 20; background: rgba(0,0,0,0.95); padding: 30px; border-radius: 20px;
+            border: 4px solid #ff4444; width: 85%;
+        }
+        #gameOver button {
+            margin-top: 20px; padding: 12px 25px; font-size: 18px; cursor: pointer;
+            background: #ff4444; color: #fff; border: none; border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>SCORE: <span id="score">0</span></div>
+        <div id="ammoBox" style="color: #ffcc00;">BAKLAVAS: <span id="ammo">3</span></div>
+    </div>
+    
+    <div id="joystick" class="touch-btn">DRAG</div>
+    <div id="fireBtn" class="touch-btn">FIRE</div>
+
+    <div id="gameOver">
+        <div id="finalScore"></div>
+        <button onclick="restartGame()">RETRY</button>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const headImg = new Image();
+        let headLoaded = false;
+        headImg.onload = () => { headLoaded = true; };
+        headImg.src = 'photo1.png'; 
+
+        const baklavaImg = new Image();
+        let baklavaLoaded = false;
+        baklavaImg.onload = () => { baklavaLoaded = true; };
+        baklavaImg.src = 'baklava.png'; 
+
+        const failSound = new Audio('fail_sound.mp3'); 
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let gameRunning = true;
+        let score = 0;
+        let keys = {};
+        let bombs = [];
+        let baklavas = [];
+        let totalFrames = 0;
+        let secondsElapsed = 0;
+        
+        const baseSpawnRate = 35; 
+        const baseSpeed = 3;      
+        let currentMultiplier = 1;
+        let ammo = 3;
+
+        const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 7.5, walkCycle: 0 };
+
+        const joystick = document.getElementById('joystick');
+        const ammoBox = document.getElementById('ammoBox');
+        
+        document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameRunning) shootBaklava();
+        });
+
+        joystick.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = joystick.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const s = 5; 
+            keys['a'] = touch.clientX < centerX - s;
+            keys['d'] = touch.clientX > centerX + s;
+            keys['w'] = touch.clientY < centerY - s;
+            keys['s'] = touch.clientY > centerY + s;
+        });
+
+        joystick.addEventListener('touchend', () => {
+            keys['a'] = false; keys['d'] = false; keys['w'] = false; keys['s'] = false;
+        });
+
+        function shootBaklava() {
+            if (ammo > 0) {
+                // Increased speed to 18 for snappier combat
+                baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 50 });
+                ammo--;
+                document.getElementById('ammo').textContent = ammo;
+            }
+        }
+
+        function drawBomb(x, y, size) {
+            const centerX = x + size / 2;
+            const centerY = y + size / 2;
+            const radius = size / 2.3;
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2); ctx.fill();
+        }
+
+        function drawStickman(x, y) {
+            const headSize = 50;
+            const isMoving = keys['a'] || keys['d'] || keys['w'] || keys['s'];
+            player.walkCycle += isMoving ? 0.2 : 0;
+            const legSwing = Math.sin(player.walkCycle) * 15;
+
+            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
+            if (headLoaded) ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+            ctx.beginPath();
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 60);
+            ctx.moveTo(x, y + 40); ctx.lineTo(x - 20, y + 50 + legSwing);
+            ctx.moveTo(x, y + 40); ctx.lineTo(x + 20, y + 50 - legSwing);
+            ctx.moveTo(x, y + 60); ctx.lineTo(x - 12, y + 85 + legSwing);
+            ctx.moveTo(x, y + 60); ctx.lineTo(x + 12, y + 85 - legSwing);
+            ctx.stroke();
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            totalFrames++;
+            
+            if (totalFrames % 60 === 0) {
+                secondsElapsed++;
+                if (secondsElapsed % 20 === 0 && currentMultiplier < 3.5) currentMultiplier += 0.5;
+                
+                // Ammo Recharge 4s + Visual Pulse
+                if (secondsElapsed % 4 === 0) {
+                    ammo++;
+                    document.getElementById('ammo').textContent = ammo;
+                    ammoBox.classList.add('pulse');
+                    setTimeout(() => ammoBox.classList.remove('pulse'), 200);
+                }
+            }
+
+            if (keys['a'] && player.x > 30) player.x -= player.speed;
+            if (keys['d'] && player.x < canvas.width - 30) player.x += player.speed;
+            if (keys['w'] && player.y > 30) player.y -= player.speed;
+            if (keys['s'] && player.y < canvas.height - 150) player.y += player.speed;
+
+            if (totalFrames % Math.max(1, Math.floor(baseSpawnRate / currentMultiplier)) === 0) {
+                const size = 35 + Math.random() * 25;
+                bombs.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size, speed: baseSpeed * currentMultiplier });
+            }
+
+            baklavas.forEach((b, bi) => {
+                b.y -= b.speed;
+                bombs.forEach((bomb, mi) => {
+                    if (b.x - b.size/2 < bomb.x + bomb.width && b.x + b.size/2 > bomb.x && b.y - b.size/2 < bomb.y + bomb.height && b.y + b.size/2 > bomb.y) {
+                        bombs.splice(mi, 1); baklavas.splice(bi, 1);
+                        score += 100;
+                    }
+                });
+            });
+
+            bombs.forEach((bomb, i) => {
+                bomb.y += bomb.speed;
+                if (bomb.x < player.x + 20 && bomb.x + bomb.width > player.x - 20 &&
+                    bomb.y < player.y + 60 && bomb.y + bomb.height > player.y - 20) {
+                    gameOver();
+                }
+                if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
+            });
+
+            document.getElementById('score').textContent = score;
+        }
+
+        function draw() {
+            ctx.fillStyle = '#3d3329';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (gameRunning) drawStickman(player.x, player.y);
+            bombs.forEach(b => drawBomb(b.x, b.y, b.width));
+            baklavas.forEach(b => { if (baklavaLoaded) ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size); });
+        }
+
+        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+
+        function gameOver() {
+            gameRunning = false;
+            failSound.play().catch(e => {});
+            document.getElementById('finalScore').innerHTML = `SCORE: ${score}`;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        function restartGame() {
+            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; currentMultiplier = 1; ammo = 3;
+            bombs = []; baklavas = [];
+            player.x = canvas.width / 2; player.y = canvas.height / 2;
+            document.getElementById('ammo').textContent = ammo;
+            document.getElementById('gameOver').style.display = 'none';
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
