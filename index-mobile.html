@@ -1,14 +1,19 @@
-HTML
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Mobile Action</title>
+    <title>Baklava Shooter - Character Joystick</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
-        body { overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #1a1410; }
+        body { 
+            overflow: hidden; 
+            font-family: 'Segoe UI', sans-serif; 
+            background: #1a1410; 
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
         #gameCanvas { display: block; }
         
         #ui {
@@ -17,18 +22,14 @@ HTML
             z-index: 10; pointer-events: none;
         }
 
-        #ammoBox { transition: transform 0.1s; }
-        .pulse { transform: scale(1.2); color: #00ff00 !important; }
-
-        .touch-btn {
-            position: absolute; bottom: 40px; border-radius: 50%;
-            background: rgba(255, 255, 255, 0.15); border: 2px solid rgba(255,255,255,0.3);
+        #fireBtn { 
+            position: absolute; bottom: 40px; right: 25px; 
+            width: 85px; height: 85px; border-radius: 50%;
+            background: rgba(255, 68, 68, 0.4); border: 2px solid rgba(255,255,255,0.3);
             display: flex; align-items: center; justify-content: center;
             color: white; font-weight: bold; user-select: none; z-index: 15;
             -webkit-tap-highlight-color: transparent;
         }
-        #fireBtn { right: 25px; width: 75px; height: 75px; background: rgba(255, 68, 68, 0.4); }
-        #joystick { left: 25px; width: 90px; height: 90px; font-size: 12px; }
 
         #gameOver {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -48,8 +49,7 @@ HTML
         <div id="ammoBox" style="color: #ffcc00;">BAKLAVAS: <span id="ammo">3</span></div>
     </div>
     
-    <div id="joystick" class="touch-btn">DRAG</div>
-    <div id="fireBtn" class="touch-btn">FIRE</div>
+    <div id="fireBtn">FIRE</div>
 
     <div id="gameOver">
         <div id="finalScore"></div>
@@ -77,8 +77,10 @@ HTML
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            window.scrollTo(0, 0);
         }
         window.addEventListener('resize', resize);
+        window.addEventListener('orientationchange', () => setTimeout(resize, 200));
         resize();
 
         let gameRunning = true;
@@ -86,6 +88,7 @@ HTML
         let keys = {};
         let bombs = [];
         let baklavas = [];
+        let particles = [];
         let totalFrames = 0;
         let secondsElapsed = 0;
         
@@ -94,40 +97,55 @@ HTML
         let currentMultiplier = 1;
         let ammo = 3;
 
-        const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 7.5, walkCycle: 0 };
+        const player = { x: canvas.width / 2, y: canvas.height / 2, speed: 7, walkCycle: 0 };
 
-        const joystick = document.getElementById('joystick');
-        const ammoBox = document.getElementById('ammoBox');
-        
+        // --- NEW CHARACTER JOYSTICK LOGIC ---
+        canvas.addEventListener('touchstart', handleTouch);
+        canvas.addEventListener('touchmove', handleTouch);
+        canvas.addEventListener('touchend', () => {
+            keys['a'] = false; keys['d'] = false; keys['w'] = false; keys['s'] = false;
+        });
+
+        function handleTouch(e) {
+            if (!gameRunning) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            
+            // "Sensitivity" / Deadzone: Higher number = Less sensitive
+            // Character only moves if your finger is more than 30 pixels away from its center
+            const deadzone = 30; 
+
+            const dx = touch.clientX - player.x;
+            const dy = touch.clientY - player.y;
+
+            keys['a'] = dx < -deadzone;
+            keys['d'] = dx > deadzone;
+            keys['w'] = dy < -deadzone;
+            keys['s'] = dy > deadzone;
+        }
+
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (gameRunning) shootBaklava();
         });
 
-        joystick.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const rect = joystick.getBoundingClientRect();
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-            
-            const s = 5; 
-            keys['a'] = touch.clientX < centerX - s;
-            keys['d'] = touch.clientX > centerX + s;
-            keys['w'] = touch.clientY < centerY - s;
-            keys['s'] = touch.clientY > centerY + s;
-        });
-
-        joystick.addEventListener('touchend', () => {
-            keys['a'] = false; keys['d'] = false; keys['w'] = false; keys['s'] = false;
-        });
-
         function shootBaklava() {
             if (ammo > 0) {
-                // Increased speed to 18 for snappier combat
                 baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 50 });
                 ammo--;
                 document.getElementById('ammo').textContent = ammo;
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    life: 25,
+                    color: color
+                });
             }
         }
 
@@ -137,6 +155,11 @@ HTML
             const radius = size / 2.3;
             ctx.fillStyle = '#000';
             ctx.beginPath(); ctx.arc(centerX, centerY, radius, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - radius);
+            ctx.quadraticCurveTo(centerX + 5, centerY - radius - 8, centerX + 10, centerY - radius - 3);
+            ctx.stroke();
         }
 
         function drawStickman(x, y) {
@@ -162,14 +185,9 @@ HTML
             
             if (totalFrames % 60 === 0) {
                 secondsElapsed++;
-                if (secondsElapsed % 20 === 0 && currentMultiplier < 3.5) currentMultiplier += 0.5;
-                
-                // Ammo Recharge 4s + Visual Pulse
                 if (secondsElapsed % 4 === 0) {
                     ammo++;
                     document.getElementById('ammo').textContent = ammo;
-                    ammoBox.classList.add('pulse');
-                    setTimeout(() => ammoBox.classList.remove('pulse'), 200);
                 }
             }
 
@@ -187,6 +205,7 @@ HTML
                 b.y -= b.speed;
                 bombs.forEach((bomb, mi) => {
                     if (b.x - b.size/2 < bomb.x + bomb.width && b.x + b.size/2 > bomb.x && b.y - b.size/2 < bomb.y + bomb.height && b.y + b.size/2 > bomb.y) {
+                        createExplosion(bomb.x + bomb.width/2, bomb.y + bomb.height/2, '#FFD700');
                         bombs.splice(mi, 1); baklavas.splice(bi, 1);
                         score += 100;
                     }
@@ -197,11 +216,16 @@ HTML
                 bomb.y += bomb.speed;
                 if (bomb.x < player.x + 20 && bomb.x + bomb.width > player.x - 20 &&
                     bomb.y < player.y + 60 && bomb.y + bomb.height > player.y - 20) {
+                    createExplosion(player.x, player.y, '#f00');
                     gameOver();
                 }
                 if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
 
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
             document.getElementById('score').textContent = score;
         }
 
@@ -211,6 +235,11 @@ HTML
             if (gameRunning) drawStickman(player.x, player.y);
             bombs.forEach(b => drawBomb(b.x, b.y, b.width));
             baklavas.forEach(b => { if (baklavaLoaded) ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size); });
+            particles.forEach(p => {
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 25;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
         }
 
         function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
@@ -223,8 +252,8 @@ HTML
         }
 
         function restartGame() {
-            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; currentMultiplier = 1; ammo = 3;
-            bombs = []; baklavas = [];
+            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; ammo = 3;
+            bombs = []; baklavas = []; particles = [];
             player.x = canvas.width / 2; player.y = canvas.height / 2;
             document.getElementById('ammo').textContent = ammo;
             document.getElementById('gameOver').style.display = 'none';
