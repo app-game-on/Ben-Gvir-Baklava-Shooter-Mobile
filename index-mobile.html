@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Leaderboard Edition</title>
+    <title>Baklava Shooter - Balanced</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -12,7 +12,6 @@
         }
         #gameCanvas { display: block; }
         
-        /* Login Screen */
         #loginScreen {
             position: absolute; inset: 0; background: #1a1410; z-index: 100;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -20,11 +19,11 @@
         }
         #loginScreen input {
             padding: 15px; font-size: 18px; border-radius: 8px; border: none;
-            margin: 20px 0; width: 80%; max-width: 300px;
+            margin: 20px 0; width: 80%; max-width: 300px; outline: none;
         }
         #loginScreen button {
             padding: 15px 40px; font-size: 20px; background: #ffcc00; 
-            border: none; border-radius: 8px; font-weight: bold;
+            border: none; border-radius: 8px; font-weight: bold; cursor: pointer;
         }
 
         #ui {
@@ -48,10 +47,7 @@
             border: 4px solid #ff4444; width: 90%; max-width: 400px;
         }
 
-        /* Leaderboard Table */
-        .leaderboard {
-            width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px;
-        }
+        .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
         .leaderboard th { border-bottom: 2px solid #ff4444; padding: 5px; }
         .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
         .gold { color: #ffcc00; font-weight: bold; }
@@ -66,7 +62,7 @@
 
     <div id="loginScreen">
         <h1>ENTER USERNAME</h1>
-        <input type="text" id="usernameInput" placeholder="Your Name..." maxlength="12">
+        <input type="text" id="usernameInput" placeholder="Name..." maxlength="12">
         <button onclick="startGame()">START GAME</button>
     </div>
 
@@ -81,19 +77,12 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore"></div>
-        
-        <h3>LEADERBOARD</h3>
+        <h3>TOP SCORES</h3>
         <table class="leaderboard">
-            <thead>
-                <tr>
-                    <th>NAME</th>
-                    <th>SCORE</th>
-                </tr>
-            </thead>
+            <thead><tr><th>NAME</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody"></tbody>
         </table>
-
-        <button onclick="restartGame()">TRY AGAIN</button>
+        <button onclick="restartGame()">RETRY</button>
     </div>
     
     <canvas id="gameCanvas"></canvas>
@@ -116,31 +105,27 @@
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            player.x = canvas.width / 2;
-            player.y = canvas.height * 0.7;
+            if(!gameRunning) {
+                player.x = canvas.width / 2;
+                player.y = canvas.height * 0.7;
+            }
         }
         window.addEventListener('resize', resize);
         resize();
 
         function startGame() {
             const input = document.getElementById('usernameInput').value;
-            if (input.trim() === "") {
-                alert("Please enter a name!");
-                return;
-            }
+            if (input.trim() === "") return alert("Enter a name!");
             username = input.toUpperCase();
             document.getElementById('loginScreen').style.display = 'none';
             gameRunning = true;
             gameLoop();
         }
 
-        // --- LEADERBOARD LOGIC ---
         function saveScore(name, finalScore) {
             let scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
             scores.push({ name: name, score: finalScore });
-            // Sort high to low
             scores.sort((a, b) => b.score - a.score);
-            // Keep top 5
             scores = scores.slice(0, 5);
             localStorage.setItem('baklavaScores', JSON.stringify(scores));
             displayLeaderboard();
@@ -149,17 +134,9 @@
         function displayLeaderboard() {
             const scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
             const body = document.getElementById('leaderboardBody');
-            body.innerHTML = "";
-            scores.forEach((s, index) => {
-                const row = `<tr>
-                    <td class="${index === 0 ? 'gold' : ''}">${s.name}</td>
-                    <td>${s.score.toLocaleString()}</td>
-                </tr>`;
-                body.innerHTML += row;
-            });
+            body.innerHTML = scores.map((s, i) => `<tr><td class="${i===0?'gold':''}">${s.name}</td><td>${s.score}</td></tr>`).join('');
         }
 
-        // --- CONTROLS ---
         canvas.addEventListener('touchstart', handleTouch, {passive: false});
         canvas.addEventListener('touchmove', handleTouch, {passive: false});
         canvas.addEventListener('touchend', () => { keys.a = keys.d = keys.w = keys.s = false; });
@@ -188,25 +165,21 @@
             }
         }
 
-        function triggerDeath() {
-            gameRunning = false;
-            flashOpacity = 1;
-            failSound.play().catch(e => {});
-            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-            
-            // Mega Explosion
-            for(let i=0; i<80; i++) particles.push({
-                x: player.x, y: player.y, 
-                vx: (Math.random()-0.5)*20, vy: (Math.random()-0.5)*20, 
-                life: 50, color: '#ff4400', size: 3+Math.random()*5
-            });
+        function drawStickman(x, y) {
+            const headSize = 45;
+            const isMoving = keys.a || keys.d || keys.w || keys.s;
+            player.walkCycle += isMoving ? 0.2 : 0;
+            const swing = Math.sin(player.walkCycle) * 15;
 
-            saveScore(username, score);
-
-            setTimeout(() => {
-                document.getElementById('finalScore').innerHTML = `FINAL SCORE: ${score}`;
-                document.getElementById('gameOver').style.display = 'block';
-            }, 800);
+            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
+            ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+            ctx.beginPath();
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Spine
+            ctx.moveTo(x, y + 35); ctx.lineTo(x - 20, y + 45 + swing); // Arms
+            ctx.moveTo(x, y + 35); ctx.lineTo(x + 20, y + 45 - swing);
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Legs
+            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
+            ctx.stroke();
         }
 
         function update() {
@@ -214,7 +187,7 @@
             totalFrames++;
             if (totalFrames % 60 === 0) {
                 secondsElapsed++;
-                if (secondsElapsed % 15 === 0) { stage++; document.getElementById('stage').textContent = stage; }
+                if (secondsElapsed % 20 === 0) { stage++; document.getElementById('stage').textContent = stage; }
                 if (secondsElapsed % 4 === 0) { ammo++; document.getElementById('ammo').textContent = ammo; }
             }
 
@@ -223,10 +196,10 @@
             if (keys.w && player.y > 30) player.y -= player.speed;
             if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-            let spawnRate = Math.max(8, 35 - (stage * 4));
+            let spawnRate = Math.max(12, 40 - (stage * 3));
             if (totalFrames % spawnRate === 0) {
                 const size = 30 + Math.random() * 20;
-                bombs.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size, speed: 3.5 + (stage * 0.9) });
+                bombs.push({ x: Math.random() * (canvas.width-size), y: -size, width: size, height: size, speed: 2.5 + (stage * 0.5) });
             }
 
             baklavas.forEach((b, bi) => {
@@ -240,7 +213,7 @@
 
             bombs.forEach((bomb, i) => {
                 bomb.y += bomb.speed;
-                if (bomb.x < player.x + 20 && bomb.x + bomb.width > player.x - 20 && bomb.y < player.y + 60 && bomb.y + bomb.height > player.y - 20) {
+                if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 && bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
                     triggerDeath();
                 }
                 if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
@@ -250,36 +223,34 @@
             document.getElementById('score').textContent = score;
         }
 
+        function triggerDeath() {
+            gameRunning = false; flashOpacity = 1;
+            failSound.play().catch(e => {});
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            for(let i=0; i<100; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
+            saveScore(username, score);
+            setTimeout(() => {
+                document.getElementById('finalScore').innerHTML = `SCORE: ${score}`;
+                document.getElementById('gameOver').style.display = 'block';
+            }, 800);
+        }
+
         function draw() {
             ctx.fillStyle = '#3d3329'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            if (gameRunning) {
-                const headSize = 45;
-                ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
-                ctx.drawImage(headImg, player.x - headSize/2, player.y - headSize/2, headSize, headSize);
-                ctx.beginPath(); ctx.moveTo(player.x, player.y+25); ctx.lineTo(player.x, player.y+55); // Body
-                ctx.moveTo(player.x, player.y+55); ctx.lineTo(player.x-10, player.y+80); // Legs
-                ctx.moveTo(player.x, player.y+55); ctx.lineTo(player.x+10, player.y+80); ctx.stroke();
-            }
-
+            if (gameRunning) drawStickman(player.x, player.y);
             bombs.forEach(b => {
                 ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x+b.width/2, b.y+b.height/2, b.width/2.3, 0, Math.PI*2); ctx.fill();
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size));
             particles.forEach(p => {
-                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 50;
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60;
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
             });
             ctx.globalAlpha = 1.0;
-            if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); flashOpacity -= 0.1; }
+            if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); flashOpacity -= 0.05; }
         }
 
-        function gameLoop() { 
-            if (gameRunning || particles.length > 0) {
-                update(); draw(); requestAnimationFrame(gameLoop); 
-            }
-        }
-
+        function gameLoop() { if (gameRunning || particles.length > 0) { update(); draw(); requestAnimationFrame(gameLoop); } }
         function restartGame() {
             gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; stage = 1; ammo = 3;
             bombs = []; baklavas = []; particles = [];
