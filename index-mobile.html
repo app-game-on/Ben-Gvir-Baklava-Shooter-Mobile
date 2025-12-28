@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Fixed Speed</title>
+    <title>Baklava Shooter - Perfect Speed Lock</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -62,7 +62,7 @@
 
     <div id="loginScreen">
         <h1>BAKLAVA SHOOTER</h1>
-        <input type="text" id="usernameInput" placeholder="Your Name..." maxlength="12">
+        <input type="text" id="usernameInput" placeholder="Enter Name..." maxlength="12">
         <button onclick="startGame()">START GAME</button>
     </div>
 
@@ -76,7 +76,7 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore" style="font-size: 20px; margin: 10px 0;"></div>
-        <h3 style="color:#ffcc00;">TOP RANKINGS</h3>
+        <h3 style="color:#ffcc00;">ALL-TIME BEST</h3>
         <table class="leaderboard">
             <thead><tr><th>PLAYER</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody"></tbody>
@@ -95,14 +95,13 @@
 
         let username = "";
         let gameRunning = false;
+        let animationId; // To track and kill old loops
         let score = 0, secondsElapsed = 0, totalFrames = 0, ammo = 3, flashOpacity = 0;
         let bombs = [], baklavas = [], particles = [];
         let keys = {w:false, a:false, s:false, d:false};
 
         const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
-        
-        // STRICT CONSTANT SPEED - Never changes between tries
-        const BOMB_SPEED = 4.0; 
+        const FIXED_BOMB_SPEED = 4.0; // The only speed allowed
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -120,17 +119,30 @@
             if (input.trim() === "") return alert("Enter a name!");
             username = input.toUpperCase().trim();
             document.getElementById('loginScreen').style.display = 'none';
-            gameRunning = true;
+            initGameValues();
             gameLoop();
+        }
+
+        function initGameValues() {
+            gameRunning = true;
+            score = 0;
+            secondsElapsed = 0;
+            totalFrames = 0;
+            ammo = 3;
+            bombs = [];
+            baklavas = [];
+            particles = [];
+            player.x = canvas.width / 2;
+            player.y = canvas.height * 0.7;
+            document.getElementById('score').textContent = "0";
+            document.getElementById('ammo').textContent = "3";
         }
 
         function saveScore(name, finalScore) {
             let scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
-            const existingEntryIndex = scores.findIndex(s => s.name === name);
-            if (existingEntryIndex !== -1) {
-                if (finalScore > scores[existingEntryIndex].score) {
-                    scores[existingEntryIndex].score = finalScore;
-                }
+            const idx = scores.findIndex(s => s.name === name);
+            if (idx !== -1) {
+                if (finalScore > scores[idx].score) scores[idx].score = finalScore;
             } else {
                 scores.push({ name: name, score: finalScore });
             }
@@ -156,41 +168,34 @@
             if (!gameRunning) return;
             e.preventDefault();
             const touch = e.touches[0];
-            const deadzone = 20; 
             const dx = touch.clientX - player.x;
             const dy = touch.clientY - player.y;
-            keys.a = dx < -deadzone; keys.d = dx > deadzone;
-            keys.w = dy < -deadzone; keys.s = dy > deadzone;
+            keys.a = dx < -20; keys.d = dx > 20;
+            keys.w = dy < -20; keys.s = dy > 20;
         }
 
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
             e.stopPropagation();
-            if (gameRunning) shootBaklava();
-        });
-
-        function shootBaklava() {
-            if (ammo > 0) {
+            if (gameRunning && ammo > 0) {
                 baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 45 });
                 ammo--;
                 document.getElementById('ammo').textContent = ammo;
             }
-        }
+        });
 
         function drawStickman(x, y) {
             const headSize = 45;
             const isMoving = keys.a || keys.d || keys.w || keys.s;
             player.walkCycle += isMoving ? 0.2 : 0;
             const swing = Math.sin(player.walkCycle) * 15;
-            
             ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
             ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
-            
             ctx.beginPath();
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Spine
-            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); // Left Arm
-            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing); // Right Arm
-            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Left Leg
-            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing); // Right Leg
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Body
+            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); // Arms
+            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing);
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Legs
+            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
             ctx.stroke();
         }
 
@@ -200,10 +205,7 @@
             
             if (totalFrames % 60 === 0) {
                 secondsElapsed++;
-                if (secondsElapsed % 4 === 0) { 
-                    ammo++; 
-                    document.getElementById('ammo').textContent = ammo; 
-                }
+                if (secondsElapsed % 4 === 0) { ammo++; document.getElementById('ammo').textContent = ammo; }
             }
 
             if (keys.a && player.x > 30) player.x -= player.speed;
@@ -211,16 +213,11 @@
             if (keys.w && player.y > 30) player.y -= player.speed;
             if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-            // Spawn Rate is consistent based on game time, resets on restart
-            let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 8));
+            // Frequency (how many bombs) increases slowly, but SPEED never changes
+            let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 10));
             if (totalFrames % spawnRate === 0) {
                 const size = 30 + Math.random() * 20;
-                bombs.push({ 
-                    x: Math.random() * (canvas.width-size), 
-                    y: -size, 
-                    width: size, height: size, 
-                    speed: BOMB_SPEED 
-                });
+                bombs.push({ x: Math.random() * (canvas.width-size), y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED });
             }
 
             baklavas.forEach((b, bi) => {
@@ -235,6 +232,7 @@
             bombs.forEach((bomb, i) => {
                 bomb.y += bomb.speed;
                 if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 && bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
+                    gameRunning = false;
                     triggerDeath();
                 }
                 if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
@@ -245,20 +243,13 @@
         }
 
         function triggerDeath() {
-            gameRunning = false; flashOpacity = 1;
+            flashOpacity = 1;
             failSound.play().catch(e => {});
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-            
-            for(let i=0; i<100; i++) particles.push({ 
-                x: player.x, y: player.y, 
-                vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, 
-                life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 
-            });
-            
+            for(let i=0; i<100; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
             saveScore(username, score);
-            
             setTimeout(() => {
-                document.getElementById('finalScore').innerHTML = `SESSION SCORE: ${score}`;
+                document.getElementById('finalScore').innerHTML = `SCORE: ${score}`;
                 document.getElementById('gameOver').style.display = 'block';
             }, 800);
         }
@@ -275,33 +266,22 @@
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
             });
             ctx.globalAlpha = 1.0;
-            if (flashOpacity > 0) { 
-                ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; 
-                ctx.fillRect(0,0,canvas.width, canvas.height); 
-                flashOpacity -= 0.05; 
-            }
+            if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); flashOpacity -= 0.05; }
         }
 
         function gameLoop() { 
-            if (gameRunning || particles.length > 0) { 
-                update(); draw(); requestAnimationFrame(gameLoop); 
-            } 
+            // Only update/draw if the game is running OR if death particles are still flying
+            if (gameRunning || particles.length > 0) {
+                update(); 
+                draw(); 
+                animationId = requestAnimationFrame(gameLoop); 
+            }
         }
 
         function restartGame() {
-            // FULL RESET OF ALL VARIABLES
-            gameRunning = true; 
-            score = 0; 
-            secondsElapsed = 0; 
-            totalFrames = 0; 
-            ammo = 3;
-            bombs = []; 
-            baklavas = []; 
-            particles = [];
-            player.x = canvas.width / 2; 
-            player.y = canvas.height * 0.7;
-            document.getElementById('ammo').textContent = ammo;
+            cancelAnimationFrame(animationId); // KILL the previous loop entirely
             document.getElementById('gameOver').style.display = 'none';
+            initGameValues();
             gameLoop();
         }
     </script>
