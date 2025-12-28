@@ -106,7 +106,7 @@
         let keys = {w:false, a:false, s:false, d:false};
 
         const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
-        const FIXED_BOMB_SPEED = 4.0;
+        const FIXED_BOMB_SPEED = 4.2;
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -139,17 +139,10 @@
                 }
                 scoreList.forEach((s, i) => {
                     if (i < 5) {
-                        body.innerHTML += `
-                            <tr>
-                                <td class="${i===0?'gold':''}">${i+1}</td>
-                                <td class="${i===0?'gold':''}">${s.name}</td>
-                                <td>${parseInt(s.score).toLocaleString()}</td>
-                            </tr>`;
+                        body.innerHTML += `<tr><td class="${i===0?'gold':''}">${i+1}</td><td class="${i===0?'gold':''}">${s.name}</td><td>${parseInt(s.score).toLocaleString()}</td></tr>`;
                     }
                 });
-            } catch (err) {
-                console.error("Leaderboard error:", err);
-            }
+            } catch (err) { console.error("Leaderboard error:", err); }
         }
 
         async function submitScore(name, finalScore) {
@@ -173,12 +166,9 @@
             if (!gameRunning) return;
             e.preventDefault();
             const touch = e.touches[0];
-            
-            // ADJUSTMENT: Center joystick on body instead of head (player.y + 40 is roughly the torso)
             const bodyY = player.y + 40;
             const dx = touch.clientX - player.x;
             const dy = touch.clientY - bodyY;
-            
             keys.a = dx < -25; keys.d = dx > 25;
             keys.w = dy < -25; keys.s = dy > 25;
         }
@@ -208,6 +198,41 @@
             ctx.stroke();
         }
 
+        function drawBomb(b) {
+            const centerX = b.x + b.width / 2;
+            const centerY = b.y + b.height / 2;
+            const radius = b.width / 2.2;
+
+            // Wick
+            ctx.strokeStyle = '#63452c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - radius);
+            ctx.quadraticCurveTo(centerX + 10, centerY - radius - 15, centerX + 15, centerY - radius - 5);
+            ctx.stroke();
+
+            // Fuse Spark
+            ctx.fillStyle = totalFrames % 4 === 0 ? '#ffff00' : '#ff4400';
+            ctx.beginPath();
+            ctx.arc(centerX + 15, centerY - radius - 5, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bomb Body
+            const grad = ctx.createRadialGradient(centerX - 5, centerY - 5, 2, centerX, centerY, radius);
+            grad.addColorStop(0, '#444');
+            grad.addColorStop(1, '#000');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Reflection Highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath();
+            ctx.arc(centerX - radius/3, centerY - radius/3, radius/4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         function update() {
             if (!gameRunning) return;
             totalFrames++;
@@ -220,21 +245,17 @@
             if (keys.w && player.y > 30) player.y -= player.speed;
             if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-            let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 10));
+            let spawnRate = Math.max(12, 35 - Math.floor(secondsElapsed / 8));
             if (totalFrames % spawnRate === 0) {
-                const size = 30 + Math.random() * 20;
+                const size = 35 + Math.random() * 15;
                 
-                // DIFFICULTY INCREASE: Higher chance of spawning bombs near the sides
-                let spawnX;
-                if (Math.random() > 0.5) {
-                    // 50% chance to spawn specifically in the left 20% or right 20% of screen
-                    spawnX = Math.random() < 0.5 ? Math.random() * (canvas.width * 0.2) : (canvas.width * 0.8) + Math.random() * (canvas.width * 0.2 - size);
-                } else {
-                    spawnX = Math.random() * (canvas.width - size);
-                }
+                // MIDDLE WEIGHTED SPAWN: Use math to force more bombs toward the center
+                let rand = (Math.random() + Math.random() + Math.random()) / 3; 
+                let spawnX = (rand * (canvas.width - size));
                 
-                bombs.push({ x: spawnX, y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED });
+                bombs.push({ x: spawnX, y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED + (Math.random() * 1.5) });
             }
+
             baklavas.forEach((b, bi) => {
                 b.y -= b.speed;
                 bombs.forEach((bomb, mi) => {
@@ -243,6 +264,7 @@
                     }
                 });
             });
+
             bombs.forEach((bomb, i) => {
                 bomb.y += bomb.speed;
                 if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 && bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
@@ -251,6 +273,7 @@
                 }
                 if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
+
             particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
             document.getElementById('score').textContent = score;
         }
@@ -269,9 +292,7 @@
         function draw() {
             ctx.fillStyle = '#3d3329'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (gameRunning) drawStickman(player.x, player.y);
-            bombs.forEach(b => {
-                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x+b.width/2, b.y+b.height/2, b.width/2.3, 0, Math.PI*2); ctx.fill();
-            });
+            bombs.forEach(b => drawBomb(b));
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size));
             particles.forEach(p => {
                 ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60;
