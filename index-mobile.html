@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Permanent Records</title>
+    <title>Baklava Shooter - Fixed Speed</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -23,7 +23,7 @@
         }
         #loginScreen button {
             padding: 15px 40px; font-size: 20px; background: #ffcc00; 
-            border: none; border-radius: 8px; font-weight: bold; cursor: pointer;
+            border: none; border-radius: 8px; font-weight: bold;
         }
 
         #ui {
@@ -38,7 +38,6 @@
             background: rgba(255, 68, 68, 0.7); border: 3px solid white;
             display: flex; align-items: center; justify-content: center;
             color: white; font-size: 22px; font-weight: bold; z-index: 15;
-            -webkit-tap-highlight-color: transparent;
         }
 
         #gameOver {
@@ -50,7 +49,7 @@
 
         .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
         .leaderboard th { border-bottom: 2px solid #ff4444; padding: 5px; }
-        .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
+        .leaderboard td { padding: 8px; border-bottom: 1px solid #333; text-align: center; }
         .gold { color: #ffcc00; font-weight: bold; }
 
         #gameOver button {
@@ -63,7 +62,7 @@
 
     <div id="loginScreen">
         <h1>BAKLAVA SHOOTER</h1>
-        <input type="text" id="usernameInput" placeholder="Enter Name..." maxlength="12">
+        <input type="text" id="usernameInput" placeholder="Your Name..." maxlength="12">
         <button onclick="startGame()">START GAME</button>
     </div>
 
@@ -76,10 +75,10 @@
 
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
-        <div id="finalScore"></div>
-        <h3 style="margin-top:10px; color:#ffcc00;">ALL-TIME BEST</h3>
+        <div id="finalScore" style="font-size: 20px; margin: 10px 0;"></div>
+        <h3 style="color:#ffcc00;">TOP RANKINGS</h3>
         <table class="leaderboard">
-            <thead><tr><th>PLAYER</th><th>BEST SCORE</th></tr></thead>
+            <thead><tr><th>PLAYER</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody"></tbody>
         </table>
         <button onclick="restartGame()">RETRY</button>
@@ -102,8 +101,8 @@
 
         const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
         
-        // Locked Speed Settings
-        const CONSTANT_BOMB_SPEED = 4.0; 
+        // STRICT CONSTANT SPEED - Never changes between tries
+        const BOMB_SPEED = 4.0; 
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -128,18 +127,15 @@
         function saveScore(name, finalScore) {
             let scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
             const existingEntryIndex = scores.findIndex(s => s.name === name);
-            
             if (existingEntryIndex !== -1) {
-                // Persistent check: only update if it's an all-time personal best
                 if (finalScore > scores[existingEntryIndex].score) {
                     scores[existingEntryIndex].score = finalScore;
                 }
             } else {
                 scores.push({ name: name, score: finalScore });
             }
-            
             scores.sort((a, b) => b.score - a.score);
-            scores = scores.slice(0, 5); // Show top 5 global
+            scores = scores.slice(0, 5); 
             localStorage.setItem('baklavaScores', JSON.stringify(scores));
             displayLeaderboard();
         }
@@ -190,23 +186,24 @@
             ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
             
             ctx.beginPath();
-            // Spine
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); 
-            // Arms & Hands (Explicitly Restored)
-            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); 
-            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing);
-            // Legs
-            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); 
-            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Spine
+            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); // Left Arm
+            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing); // Right Arm
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Left Leg
+            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing); // Right Leg
             ctx.stroke();
         }
 
         function update() {
             if (!gameRunning) return;
             totalFrames++;
+            
             if (totalFrames % 60 === 0) {
                 secondsElapsed++;
-                if (secondsElapsed % 4 === 0) { ammo++; document.getElementById('ammo').textContent = ammo; }
+                if (secondsElapsed % 4 === 0) { 
+                    ammo++; 
+                    document.getElementById('ammo').textContent = ammo; 
+                }
             }
 
             if (keys.a && player.x > 30) player.x -= player.speed;
@@ -214,16 +211,15 @@
             if (keys.w && player.y > 30) player.y -= player.speed;
             if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-            // Spawn frequency increases slightly for variety, but SPEED is locked
-            let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 6));
+            // Spawn Rate is consistent based on game time, resets on restart
+            let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 8));
             if (totalFrames % spawnRate === 0) {
                 const size = 30 + Math.random() * 20;
                 bombs.push({ 
                     x: Math.random() * (canvas.width-size), 
                     y: -size, 
-                    width: size, 
-                    height: size, 
-                    speed: CONSTANT_BOMB_SPEED 
+                    width: size, height: size, 
+                    speed: BOMB_SPEED 
                 });
             }
 
@@ -253,7 +249,6 @@
             failSound.play().catch(e => {});
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
             
-            // Fail Explosion
             for(let i=0; i<100; i++) particles.push({ 
                 x: player.x, y: player.y, 
                 vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, 
@@ -263,7 +258,7 @@
             saveScore(username, score);
             
             setTimeout(() => {
-                document.getElementById('finalScore').innerHTML = `YOUR SCORE: ${score}`;
+                document.getElementById('finalScore').innerHTML = `SESSION SCORE: ${score}`;
                 document.getElementById('gameOver').style.display = 'block';
             }, 800);
         }
@@ -294,9 +289,17 @@
         }
 
         function restartGame() {
-            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; ammo = 3;
-            bombs = []; baklavas = []; particles = [];
-            player.x = canvas.width / 2; player.y = canvas.height * 0.7;
+            // FULL RESET OF ALL VARIABLES
+            gameRunning = true; 
+            score = 0; 
+            secondsElapsed = 0; 
+            totalFrames = 0; 
+            ammo = 3;
+            bombs = []; 
+            baklavas = []; 
+            particles = [];
+            player.x = canvas.width / 2; 
+            player.y = canvas.height * 0.7;
             document.getElementById('ammo').textContent = ammo;
             document.getElementById('gameOver').style.display = 'none';
             gameLoop();
