@@ -89,7 +89,6 @@
     <canvas id="gameCanvas"></canvas>
     
     <script>
-        // REPLACE THESE WITH YOUR CODES FROM DREAMLO.COM
         const DREAMLO_PUBLIC_CODE = "YOUR_PUBLIC_CODE_HERE"; 
         const DREAMLO_PRIVATE_CODE = "YOUR_PRIVATE_CODE_HERE";
 
@@ -126,26 +125,20 @@
             gameLoop();
         }
 
-        // --- ONLINE LEADERBOARD LOGIC ---
         async function fetchOnlineScores() {
             try {
                 const response = await fetch(`https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/json`);
                 const data = await response.json();
                 let scoreList = data.dreamlo.leaderboard.entry;
-                
-                // If there is only 1 score, it returns an object, not an array. We fix that here.
                 if (scoreList && !Array.isArray(scoreList)) scoreList = [scoreList];
-
                 const body = document.getElementById('leaderboardBody');
                 body.innerHTML = "";
-
                 if (!scoreList) {
                     body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
                     return;
                 }
-
                 scoreList.forEach((s, i) => {
-                    if (i < 5) { // Show top 5
+                    if (i < 5) {
                         body.innerHTML += `
                             <tr>
                                 <td class="${i===0?'gold':''}">${i+1}</td>
@@ -160,7 +153,6 @@
         }
 
         async function submitScore(name, finalScore) {
-            // This sends your score to the cloud
             await fetch(`https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`);
             fetchOnlineScores();
         }
@@ -181,10 +173,14 @@
             if (!gameRunning) return;
             e.preventDefault();
             const touch = e.touches[0];
+            
+            // ADJUSTMENT: Center joystick on body instead of head (player.y + 40 is roughly the torso)
+            const bodyY = player.y + 40;
             const dx = touch.clientX - player.x;
-            const dy = touch.clientY - player.y;
-            keys.a = dx < -20; keys.d = dx > 20;
-            keys.w = dy < -20; keys.s = dy > 20;
+            const dy = touch.clientY - bodyY;
+            
+            keys.a = dx < -25; keys.d = dx > 25;
+            keys.w = dy < -25; keys.s = dy > 25;
         }
 
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
@@ -227,7 +223,17 @@
             let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 10));
             if (totalFrames % spawnRate === 0) {
                 const size = 30 + Math.random() * 20;
-                bombs.push({ x: Math.random() * (canvas.width-size), y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED });
+                
+                // DIFFICULTY INCREASE: Higher chance of spawning bombs near the sides
+                let spawnX;
+                if (Math.random() > 0.5) {
+                    // 50% chance to spawn specifically in the left 20% or right 20% of screen
+                    spawnX = Math.random() < 0.5 ? Math.random() * (canvas.width * 0.2) : (canvas.width * 0.8) + Math.random() * (canvas.width * 0.2 - size);
+                } else {
+                    spawnX = Math.random() * (canvas.width - size);
+                }
+                
+                bombs.push({ x: spawnX, y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED });
             }
             baklavas.forEach((b, bi) => {
                 b.y -= b.speed;
@@ -253,10 +259,7 @@
             flashOpacity = 1;
             failSound.play().catch(e => {});
             for(let i=0; i<80; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
-            
-            // Send score to the internet
             submitScore(username, score);
-            
             setTimeout(() => {
                 document.getElementById('finalScore').innerHTML = `YOUR SCORE: ${score}`;
                 document.getElementById('gameOver').style.display = 'block';
