@@ -80,7 +80,7 @@
         <table class="leaderboard">
             <thead><tr><th>RANK</th><th>PLAYER</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody">
-                <tr><td colspan="3">Loading World Scores...</td></tr>
+                <tr><td colspan="3">Syncing with Server...</td></tr>
             </tbody>
         </table>
         <button onclick="restartGame()">RETRY</button>
@@ -89,6 +89,7 @@
     <canvas id="gameCanvas"></canvas>
     
     <script>
+        // Your existing codes
         const DREAMLO_PUBLIC_CODE = "65517ba85f40bbcf806c7a14"; 
         const DREAMLO_PRIVATE_CODE = "-YfrsRALQUqKkdQjI1sMUADtIBexNAUUq-VM2ywNNY3w";
 
@@ -119,35 +120,51 @@
         function startGame() {
             const input = document.getElementById('usernameInput').value;
             if (input.trim() === "") return alert("Enter a name!");
-            username = input.toUpperCase().trim();
+            username = input.toUpperCase().trim().replace(/[^A-Z0-9]/g, ""); // Clean name
             document.getElementById('loginScreen').style.display = 'none';
             initGameValues();
             gameLoop();
         }
 
+        // IMPROVED LEADERBOARD FETCHING
         async function fetchOnlineScores() {
+            const body = document.getElementById('leaderboardBody');
             try {
                 const response = await fetch(`https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/json`);
                 const data = await response.json();
+                
+                if (!data || !data.dreamlo || !data.dreamlo.leaderboard) {
+                    body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
+                    return;
+                }
+
                 let scoreList = data.dreamlo.leaderboard.entry;
-                if (scoreList && !Array.isArray(scoreList)) scoreList = [scoreList];
-                const body = document.getElementById('leaderboardBody');
-                body.innerHTML = "";
                 if (!scoreList) {
                     body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
                     return;
                 }
+
+                // Force to array if only one entry exists
+                if (!Array.isArray(scoreList)) scoreList = [scoreList];
+
+                body.innerHTML = "";
                 scoreList.forEach((s, i) => {
                     if (i < 5) {
                         body.innerHTML += `<tr><td class="${i===0?'gold':''}">${i+1}</td><td class="${i===0?'gold':''}">${s.name}</td><td>${parseInt(s.score).toLocaleString()}</td></tr>`;
                     }
                 });
-            } catch (err) { console.error("Leaderboard error:", err); }
+            } catch (err) { 
+                console.error("Leaderboard error:", err);
+                body.innerHTML = "<tr><td colspan='3'>Offline Mode</td></tr>";
+            }
         }
 
         async function submitScore(name, finalScore) {
-            await fetch(`https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`);
-            fetchOnlineScores();
+            try {
+                // We use "no-cors" to prevent the browser from blocking the upload
+                await fetch(`https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`, {mode: 'no-cors'});
+                setTimeout(fetchOnlineScores, 500); // Wait a half second for server to update then show
+            } catch(e) { console.log("Submit failed"); }
         }
 
         function initGameValues() {
@@ -198,40 +215,22 @@
             ctx.stroke();
         }
 
-        // --- IMPROVED BOMB DRAWING ---
         function drawBomb(b) {
             const cx = b.x + b.width / 2;
             const cy = b.y + b.height / 2;
             const r = b.width / 2;
-
-            // Fuse (The string)
             ctx.beginPath();
-            ctx.strokeStyle = '#8B4513';
-            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
             ctx.moveTo(cx, cy - r);
             ctx.quadraticCurveTo(cx + 10, cy - r - 15, cx + 18, cy - r - 8);
             ctx.stroke();
-
-            // Sparkle animation
             ctx.beginPath();
             ctx.fillStyle = totalFrames % 6 < 3 ? '#FFFF00' : '#FF4500';
             ctx.arc(cx + 18, cy - r - 8, 4 + Math.random() * 3, 0, Math.PI * 2);
             ctx.fill();
-
-            // Main Bomb Sphere
             const grad = ctx.createRadialGradient(cx - r/3, cy - r/3, 2, cx, cy, r);
-            grad.addColorStop(0, '#555');
-            grad.addColorStop(1, '#000');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(cx, cy, r, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Shine Highlight
-            ctx.beginPath();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            ctx.arc(cx - r/3, cy - r/3, r/4, 0, Math.PI * 2);
-            ctx.fill();
+            grad.addColorStop(0, '#555'); grad.addColorStop(1, '#000');
+            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
         }
 
         function update() {
@@ -246,19 +245,11 @@
             if (keys.w && player.y > 30) player.y -= player.speed;
             if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-            // Spawn Rate multiplied by 1.5 density
             let spawnRate = Math.max(8, Math.floor((35 - Math.floor(secondsElapsed / 8)) / 1.5));
             if (totalFrames % spawnRate === 0) {
                 const size = 30 + Math.random() * 20;
-                // Purely random placement
                 const spawnX = Math.random() * (canvas.width - size);
-                bombs.push({ 
-                    x: spawnX, 
-                    y: -size, 
-                    width: size, 
-                    height: size, 
-                    speed: FIXED_BOMB_SPEED + (Math.random() * 1.5) 
-                });
+                bombs.push({ x: spawnX, y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED + (Math.random() * 1.5) });
             }
 
             baklavas.forEach((b, bi) => {
@@ -287,7 +278,9 @@
             flashOpacity = 1;
             failSound.play().catch(e => {});
             for(let i=0; i<80; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
+            
             submitScore(username, score);
+            
             setTimeout(() => {
                 document.getElementById('finalScore').innerHTML = `YOUR SCORE: ${score}`;
                 document.getElementById('gameOver').style.display = 'block';
