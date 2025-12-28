@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Reset Edition</title>
+    <title>Baklava Shooter - Permanent Records</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -38,6 +38,7 @@
             background: rgba(255, 68, 68, 0.7); border: 3px solid white;
             display: flex; align-items: center; justify-content: center;
             color: white; font-size: 22px; font-weight: bold; z-index: 15;
+            -webkit-tap-highlight-color: transparent;
         }
 
         #gameOver {
@@ -61,8 +62,8 @@
 <body>
 
     <div id="loginScreen">
-        <h1>ENTER USERNAME</h1>
-        <input type="text" id="usernameInput" placeholder="Name..." maxlength="12">
+        <h1>BAKLAVA SHOOTER</h1>
+        <input type="text" id="usernameInput" placeholder="Enter Name..." maxlength="12">
         <button onclick="startGame()">START GAME</button>
     </div>
 
@@ -76,9 +77,9 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore"></div>
-        <h3>NEW LEADERBOARD</h3>
+        <h3 style="margin-top:10px; color:#ffcc00;">ALL-TIME BEST</h3>
         <table class="leaderboard">
-            <thead><tr><th>NAME</th><th>SCORE</th></tr></thead>
+            <thead><tr><th>PLAYER</th><th>BEST SCORE</th></tr></thead>
             <tbody id="leaderboardBody"></tbody>
         </table>
         <button onclick="restartGame()">RETRY</button>
@@ -87,9 +88,6 @@
     <canvas id="gameCanvas"></canvas>
     
     <script>
-        // RESTART LEADERBOARD: Comment this line out after the first run if you want to keep new scores!
-        localStorage.removeItem('baklavaScores');
-
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const headImg = new Image(); headImg.src = 'photo1.png'; 
@@ -103,7 +101,9 @@
         let keys = {w:false, a:false, s:false, d:false};
 
         const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
-        const CONSTANT_BOMB_SPEED = 4.0; // Fixed speed
+        
+        // Locked Speed Settings
+        const CONSTANT_BOMB_SPEED = 4.0; 
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -128,13 +128,18 @@
         function saveScore(name, finalScore) {
             let scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
             const existingEntryIndex = scores.findIndex(s => s.name === name);
+            
             if (existingEntryIndex !== -1) {
-                if (finalScore > scores[existingEntryIndex].score) scores[existingEntryIndex].score = finalScore;
+                // Persistent check: only update if it's an all-time personal best
+                if (finalScore > scores[existingEntryIndex].score) {
+                    scores[existingEntryIndex].score = finalScore;
+                }
             } else {
                 scores.push({ name: name, score: finalScore });
             }
+            
             scores.sort((a, b) => b.score - a.score);
-            scores = scores.slice(0, 5);
+            scores = scores.slice(0, 5); // Show top 5 global
             localStorage.setItem('baklavaScores', JSON.stringify(scores));
             displayLeaderboard();
         }
@@ -142,7 +147,9 @@
         function displayLeaderboard() {
             const scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
             const body = document.getElementById('leaderboardBody');
-            body.innerHTML = scores.map((s, i) => `<tr><td class="${i===0?'gold':''}">${s.name}</td><td>${s.score.toLocaleString()}</td></tr>`).join('');
+            body.innerHTML = scores.map((s, i) => 
+                `<tr><td class="${i===0?'gold':''}">${s.name}</td><td>${s.score.toLocaleString()}</td></tr>`
+            ).join('');
         }
 
         canvas.addEventListener('touchstart', handleTouch, {passive: false});
@@ -178,13 +185,18 @@
             const isMoving = keys.a || keys.d || keys.w || keys.s;
             player.walkCycle += isMoving ? 0.2 : 0;
             const swing = Math.sin(player.walkCycle) * 15;
+            
             ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
             ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+            
             ctx.beginPath();
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Spine
-            ctx.moveTo(x, y + 35); ctx.lineTo(x - 20, y + 45 + swing); // Arms/Hands
-            ctx.moveTo(x, y + 35); ctx.lineTo(x + 20, y + 45 - swing);
-            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Legs
+            // Spine
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); 
+            // Arms & Hands (Explicitly Restored)
+            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); 
+            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing);
+            // Legs
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); 
             ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
             ctx.stroke();
         }
@@ -202,11 +214,17 @@
             if (keys.w && player.y > 30) player.y -= player.speed;
             if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-            // Frequency still increases slightly so it's not too boring, but speed is fixed
-            let spawnRate = Math.max(15, 40 - Math.floor(secondsElapsed / 5));
+            // Spawn frequency increases slightly for variety, but SPEED is locked
+            let spawnRate = Math.max(15, 38 - Math.floor(secondsElapsed / 6));
             if (totalFrames % spawnRate === 0) {
                 const size = 30 + Math.random() * 20;
-                bombs.push({ x: Math.random() * (canvas.width-size), y: -size, width: size, height: size, speed: CONSTANT_BOMB_SPEED });
+                bombs.push({ 
+                    x: Math.random() * (canvas.width-size), 
+                    y: -size, 
+                    width: size, 
+                    height: size, 
+                    speed: CONSTANT_BOMB_SPEED 
+                });
             }
 
             baklavas.forEach((b, bi) => {
@@ -234,10 +252,18 @@
             gameRunning = false; flashOpacity = 1;
             failSound.play().catch(e => {});
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-            for(let i=0; i<100; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
+            
+            // Fail Explosion
+            for(let i=0; i<100; i++) particles.push({ 
+                x: player.x, y: player.y, 
+                vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, 
+                life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 
+            });
+            
             saveScore(username, score);
+            
             setTimeout(() => {
-                document.getElementById('finalScore').innerHTML = `SCORE: ${score}`;
+                document.getElementById('finalScore').innerHTML = `YOUR SCORE: ${score}`;
                 document.getElementById('gameOver').style.display = 'block';
             }, 800);
         }
@@ -254,11 +280,19 @@
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
             });
             ctx.globalAlpha = 1.0;
-            if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); flashOpacity -= 0.05; }
+            if (flashOpacity > 0) { 
+                ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; 
+                ctx.fillRect(0,0,canvas.width, canvas.height); 
+                flashOpacity -= 0.05; 
+            }
         }
 
-        function gameLoop() { if (gameRunning || particles.length > 0) { update(); draw(); requestAnimationFrame(gameLoop); } }
-        
+        function gameLoop() { 
+            if (gameRunning || particles.length > 0) { 
+                update(); draw(); requestAnimationFrame(gameLoop); 
+            } 
+        }
+
         function restartGame() {
             gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; ammo = 3;
             bombs = []; baklavas = []; particles = [];
