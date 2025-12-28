@@ -1,317 +1,240 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Online Leaderboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
-        body { 
-            overflow: hidden; font-family: 'Segoe UI', sans-serif; 
-            background: #1a1410; position: fixed; width: 100%; height: 100%;
-        }
-        #gameCanvas { display: block; }
-        
-        #loginScreen {
-            position: absolute; inset: 0; background: #1a1410; z-index: 100;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: white; padding: 20px; text-align: center;
-        }
-        #loginScreen input {
-            padding: 15px; font-size: 18px; border-radius: 8px; border: none;
-            margin: 20px 0; width: 80%; max-width: 300px; outline: none;
-        }
-        #loginScreen button {
-            padding: 15px 40px; font-size: 20px; background: #ffcc00; 
-            border: none; border-radius: 8px; font-weight: bold;
-        }
+// UPDATED FROM YOUR SCREENSHOT
+const DREAMLO_PUBLIC_CODE = "69517ba88f40bbcf806c7a14"; 
+const DREAMLO_PRIVATE_CODE = "-YfrsRALQUqKkdQjI1sMUADtlBexNAUUq-VM2ywNNY3w";
 
-        #ui {
-            position: absolute; top: 10px; right: 10px; text-align: right; color: #fff;
-            font-size: 18px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
-            z-index: 10; pointer-events: none;
-        }
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const headImg = new Image(); headImg.src = 'photo1.png'; 
+const baklavaImg = new Image(); baklavaImg.src = 'baklava.png'; 
+const failSound = new Audio('fail_sound.mp3'); 
 
-        #fireBtn { 
-            position: absolute; bottom: 40px; left: 25px; 
-            width: 95px; height: 95px; border-radius: 50%;
-            background: rgba(255, 68, 68, 0.7); border: 3px solid white;
-            display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 22px; font-weight: bold; z-index: 15;
-        }
+let username = "";
+let gameRunning = false;
+let animationId;
+let score = 0, secondsElapsed = 0, totalFrames = 0, ammo = 3, flashOpacity = 0;
+let bombs = [], baklavas = [], particles = [];
+let keys = {w:false, a:false, s:false, d:false};
 
-        #gameOver {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; color: #fff; display: none;
-            z-index: 20; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px;
-            border: 4px solid #ff4444; width: 95%; max-width: 400px;
-        }
+const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
+const FIXED_BOMB_SPEED = 4.2;
 
-        .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
-        .leaderboard th { border-bottom: 2px solid #ff4444; padding: 5px; }
-        .leaderboard td { padding: 8px; border-bottom: 1px solid #333; text-align: center; }
-        .gold { color: #ffcc00; font-weight: bold; }
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    if(!gameRunning) { player.x = canvas.width / 2; player.y = canvas.height * 0.7; }
+}
+window.addEventListener('resize', resize);
+resize();
 
-        #gameOver button {
-            margin-top: 10px; padding: 12px 25px; font-size: 18px; 
-            background: #ff4444; color: #fff; border: none; border-radius: 10px;
-        }
-    </style>
-</head>
-<body>
+function startGame() {
+    const input = document.getElementById('usernameInput').value;
+    if (input.trim() === "") return alert("Enter a name!");
+    username = input.toUpperCase().trim().replace(/[^A-Z0-9]/g, ""); 
+    document.getElementById('loginScreen').style.display = 'none';
+    initGameValues();
+    gameLoop();
+}
 
-    <div id="loginScreen">
-        <h1>BAKLAVA SHOOTER</h1>
-        <input type="text" id="usernameInput" placeholder="Enter Name..." maxlength="12">
-        <button onclick="startGame()">START GAME</button>
-    </div>
-
-    <div id="ui">
-        <div>SCORE: <span id="score">0</span></div>
-        <div id="ammoBox" style="color: #ffcc00;">BAKLAVAS: <span id="ammo">3</span></div>
-    </div>
+// RELIABLE JSONP FETCHING (Bypasses CORS blocks)
+function fetchOnlineScores() {
+    const body = document.getElementById('leaderboardBody');
     
-    <div id="fireBtn">FIRE</div>
+    // Remove old script if it exists
+    const oldScript = document.getElementById('dreamloScript');
+    if (oldScript) oldScript.remove();
 
-    <div id="gameOver">
-        <h1 style="color: #ff4444;">WASTED</h1>
-        <div id="finalScore" style="font-size: 20px; margin: 5px 0;"></div>
-        <h3 style="color:#ffcc00;">WORLDWIDE RANKINGS</h3>
-        <table class="leaderboard">
-            <thead><tr><th>RANK</th><th>PLAYER</th><th>SCORE</th></tr></thead>
-            <tbody id="leaderboardBody">
-                <tr><td colspan="3">Syncing Scores...</td></tr>
-            </tbody>
-        </table>
-        <button onclick="restartGame()">RETRY</button>
-    </div>
+    // Create a new "Script" tag to get the data
+    const script = document.createElement('script');
+    script.id = 'dreamloScript';
+    script.src = `https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/jsonp?callback=displayScores`;
     
-    <canvas id="gameCanvas"></canvas>
+    document.body.appendChild(script);
+
+    // Timeout if server doesn't respond
+    setTimeout(() => {
+        if (body.innerHTML.includes("Syncing")) {
+            body.innerHTML = "<tr><td colspan='3'>Offline: Try a different name</td></tr>";
+        }
+    }, 5000);
+}
+
+// This function runs automatically when Dreamlo sends data back
+window.displayScores = function(data) {
+    const body = document.getElementById('leaderboardBody');
     
-    <script>
-        // UPDATED FROM YOUR SCREENSHOT
-        const DREAMLO_PUBLIC_CODE = "69517ba88f40bbcf806c7a14"; 
-        const DREAMLO_PRIVATE_CODE = "-YfrsRALQUqKkdQjI1sMUADtlBexNAUUq-VM2ywNNY3w";
+    if (!data || !data.dreamlo || !data.dreamlo.leaderboard) {
+        body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
+        return;
+    }
 
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const headImg = new Image(); headImg.src = 'photo1.png'; 
-        const baklavaImg = new Image(); baklavaImg.src = 'baklava.png'; 
-        const failSound = new Audio('fail_sound.mp3'); 
+    let scoreList = data.dreamlo.leaderboard.entry;
+    if (!scoreList) {
+        body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
+        return;
+    }
 
-        let username = "";
-        let gameRunning = false;
-        let animationId;
-        let score = 0, secondsElapsed = 0, totalFrames = 0, ammo = 3, flashOpacity = 0;
-        let bombs = [], baklavas = [], particles = [];
-        let keys = {w:false, a:false, s:false, d:false};
+    if (!Array.isArray(scoreList)) scoreList = [scoreList];
 
-        const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
-        const FIXED_BOMB_SPEED = 4.2;
-
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            if(!gameRunning) { player.x = canvas.width / 2; player.y = canvas.height * 0.7; }
+    body.innerHTML = "";
+    scoreList.forEach((s, i) => {
+        if (i < 5) {
+            body.innerHTML += `<tr><td class="${i===0?'gold':''}">${i+1}</td><td class="${i===0?'gold':''}">${s.name}</td><td>${parseInt(s.score).toLocaleString()}</td></tr>`;
         }
-        window.addEventListener('resize', resize);
-        resize();
+    });
+};
 
-        function startGame() {
-            const input = document.getElementById('usernameInput').value;
-            if (input.trim() === "") return alert("Enter a name!");
-            username = input.toUpperCase().trim().replace(/[^A-Z0-9]/g, ""); 
-            document.getElementById('loginScreen').style.display = 'none';
-            initGameValues();
-            gameLoop();
-        }
+async function submitScore(name, finalScore) {
+    // We use an <img> tag to send data secretly—this is the most compatible way for local files
+    const pinger = new Image();
+    pinger.src = `https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`;
+    
+    // Give it a moment to save before refreshing the list
+    setTimeout(fetchOnlineScores, 1500); 
+}
 
-        // BROWSER SECURITY FIX (CORS PROXY)
-        async function fetchOnlineScores() {
-            const body = document.getElementById('leaderboardBody');
-            const proxyUrl = "https://api.allorigins.win/get?url=";
-            const targetUrl = encodeURIComponent(`https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/json`);
+function initGameValues() {
+    gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; ammo = 3;
+    bombs = []; baklavas = []; particles = [];
+    player.x = canvas.width / 2; player.y = canvas.height * 0.7;
+    document.getElementById('score').textContent = "0";
+    document.getElementById('ammo').textContent = "3";
+}
 
-            try {
-                const response = await fetch(proxyUrl + targetUrl);
-                const result = await response.json();
-                const data = JSON.parse(result.contents);
-                
-                if (!data || !data.dreamlo || !data.dreamlo.leaderboard) {
-                    body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
-                    return;
-                }
+canvas.addEventListener('touchstart', handleTouch, {passive: false});
+canvas.addEventListener('touchmove', handleTouch, {passive: false});
+canvas.addEventListener('touchend', () => { keys.a = keys.d = keys.w = keys.s = false; });
 
-                let scoreList = data.dreamlo.leaderboard.entry;
-                if (!scoreList) {
-                    body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
-                    return;
-                }
+function handleTouch(e) {
+    if (!gameRunning) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const bodyY = player.y + 40;
+    const dx = touch.clientX - player.x;
+    const dy = touch.clientY - bodyY;
+    keys.a = dx < -25; keys.d = dx > 25;
+    keys.w = dy < -25; keys.s = dy > 25;
+}
 
-                if (!Array.isArray(scoreList)) scoreList = [scoreList];
+document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+    if (gameRunning && ammo > 0) {
+        baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 45 });
+        ammo--;
+        document.getElementById('ammo').textContent = ammo;
+    }
+});
 
-                body.innerHTML = "";
-                scoreList.forEach((s, i) => {
-                    if (i < 5) {
-                        body.innerHTML += `<tr><td class="${i===0?'gold':''}">${i+1}</td><td class="${i===0?'gold':''}">${s.name}</td><td>${parseInt(s.score).toLocaleString()}</td></tr>`;
-                    }
-                });
-            } catch (err) { 
-                body.innerHTML = "<tr><td colspan='3'>Check Internet Connection</td></tr>";
-            }
-        }
+function drawStickman(x, y) {
+    const headSize = 45;
+    const isMoving = keys.a || keys.d || keys.w || keys.s;
+    player.walkCycle += isMoving ? 0.2 : 0;
+    const swing = Math.sin(player.walkCycle) * 15;
+    ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
+    ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+    ctx.beginPath();
+    ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); 
+    ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); 
+    ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing);
+    ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); 
+    ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
+    ctx.stroke();
+}
 
-        async function submitScore(name, finalScore) {
-            try {
-                // Use no-cors for writing to the board
-                await fetch(`https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`, {mode: 'no-cors'});
-                setTimeout(fetchOnlineScores, 1000); 
-            } catch(e) {}
-        }
+function drawBomb(b) {
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    const r = b.width / 2;
+    ctx.beginPath();
+    ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
+    ctx.moveTo(cx, cy - r);
+    ctx.quadraticCurveTo(cx + 10, cy - r - 15, cx + 18, cy - r - 8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = totalFrames % 6 < 3 ? '#FFFF00' : '#FF4500';
+    ctx.arc(cx + 18, cy - r - 8, 4 + Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+    const grad = ctx.createRadialGradient(cx - r/3, cy - r/3, 2, cx, cy, r);
+    grad.addColorStop(0, '#555'); grad.addColorStop(1, '#000');
+    ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+}
 
-        function initGameValues() {
-            gameRunning = true; score = 0; secondsElapsed = 0; totalFrames = 0; ammo = 3;
-            bombs = []; baklavas = []; particles = [];
-            player.x = canvas.width / 2; player.y = canvas.height * 0.7;
-            document.getElementById('score').textContent = "0";
-            document.getElementById('ammo').textContent = "3";
-        }
+function update() {
+    if (!gameRunning) return;
+    totalFrames++;
+    if (totalFrames % 60 === 0) {
+        secondsElapsed++;
+        if (secondsElapsed % 4 === 0) { ammo++; document.getElementById('ammo').textContent = ammo; }
+    }
+    if (keys.a && player.x > 30) player.x -= player.speed;
+    if (keys.d && player.x < canvas.width - 30) player.x += player.speed;
+    if (keys.w && player.y > 30) player.y -= player.speed;
+    if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
 
-        canvas.addEventListener('touchstart', handleTouch, {passive: false});
-        canvas.addEventListener('touchmove', handleTouch, {passive: false});
-        canvas.addEventListener('touchend', () => { keys.a = keys.d = keys.w = keys.s = false; });
+    let spawnRate = Math.max(8, Math.floor((35 - Math.floor(secondsElapsed / 8)) / 1.5));
+    if (totalFrames % spawnRate === 0) {
+        const size = 30 + Math.random() * 20;
+        const spawnX = Math.random() * (canvas.width - size);
+        bombs.push({ x: spawnX, y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED + (Math.random() * 1.5) });
+    }
 
-        function handleTouch(e) {
-            if (!gameRunning) return;
-            e.preventDefault();
-            const touch = e.touches[0];
-            const bodyY = player.y + 40;
-            const dx = touch.clientX - player.x;
-            const dy = touch.clientY - bodyY;
-            keys.a = dx < -25; keys.d = dx > 25;
-            keys.w = dy < -25; keys.s = dy > 25;
-        }
-
-        document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-            if (gameRunning && ammo > 0) {
-                baklavas.push({ x: player.x, y: player.y - 20, speed: 18, size: 45 });
-                ammo--;
-                document.getElementById('ammo').textContent = ammo;
+    baklavas.forEach((b, bi) => {
+        b.y -= b.speed;
+        bombs.forEach((bomb, mi) => {
+            if (b.x > bomb.x && b.x < bomb.x + bomb.width && b.y > bomb.y && b.y < bomb.y + bomb.height) {
+                bombs.splice(mi, 1); baklavas.splice(bi, 1); score += 100;
             }
         });
+    });
 
-        function drawStickman(x, y) {
-            const headSize = 45;
-            const isMoving = keys.a || keys.d || keys.w || keys.s;
-            player.walkCycle += isMoving ? 0.2 : 0;
-            const swing = Math.sin(player.walkCycle) * 15;
-            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
-            ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
-            ctx.beginPath();
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); 
-            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); 
-            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing);
-            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); 
-            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
-            ctx.stroke();
+    bombs.forEach((bomb, i) => {
+        bomb.y += bomb.speed;
+        if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 && bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
+            gameRunning = false;
+            triggerDeath();
         }
+        if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
+    });
 
-        function drawBomb(b) {
-            const cx = b.x + b.width / 2;
-            const cy = b.y + b.height / 2;
-            const r = b.width / 2;
-            ctx.beginPath();
-            ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3;
-            ctx.moveTo(cx, cy - r);
-            ctx.quadraticCurveTo(cx + 10, cy - r - 15, cx + 18, cy - r - 8);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.fillStyle = totalFrames % 6 < 3 ? '#FFFF00' : '#FF4500';
-            ctx.arc(cx + 18, cy - r - 8, 4 + Math.random() * 3, 0, Math.PI * 2);
-            ctx.fill();
-            const grad = ctx.createRadialGradient(cx - r/3, cy - r/3, 2, cx, cy, r);
-            grad.addColorStop(0, '#555'); grad.addColorStop(1, '#000');
-            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-        }
+    particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
+    document.getElementById('score').textContent = score;
+}
 
-        function update() {
-            if (!gameRunning) return;
-            totalFrames++;
-            if (totalFrames % 60 === 0) {
-                secondsElapsed++;
-                if (secondsElapsed % 4 === 0) { ammo++; document.getElementById('ammo').textContent = ammo; }
-            }
-            if (keys.a && player.x > 30) player.x -= player.speed;
-            if (keys.d && player.x < canvas.width - 30) player.x += player.speed;
-            if (keys.w && player.y > 30) player.y -= player.speed;
-            if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
+function triggerDeath() {
+    flashOpacity = 1;
+    failSound.play().catch(e => {});
+    for(let i=0; i<80; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
+    
+    // Only submit if a score was actually earned
+    submitScore(username, score);
+    
+    setTimeout(() => {
+        document.getElementById('finalScore').innerHTML = `YOUR SCORE: ${score}`;
+        document.getElementById('gameOver').style.display = 'block';
+    }, 800);
+}
 
-            let spawnRate = Math.max(8, Math.floor((35 - Math.floor(secondsElapsed / 8)) / 1.5));
-            if (totalFrames % spawnRate === 0) {
-                const size = 30 + Math.random() * 20;
-                const spawnX = Math.random() * (canvas.width - size);
-                bombs.push({ x: spawnX, y: -size, width: size, height: size, speed: FIXED_BOMB_SPEED + (Math.random() * 1.5) });
-            }
+function draw() {
+    ctx.fillStyle = '#3d3329'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (gameRunning) drawStickman(player.x, player.y);
+    bombs.forEach(b => drawBomb(b));
+    baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size));
+    particles.forEach(p => {
+        ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1.0;
+    if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); flashOpacity -= 0.05; }
+}
 
-            baklavas.forEach((b, bi) => {
-                b.y -= b.speed;
-                bombs.forEach((bomb, mi) => {
-                    if (b.x > bomb.x && b.x < bomb.x + bomb.width && b.y > bomb.y && b.y < bomb.y + bomb.height) {
-                        bombs.splice(mi, 1); baklavas.splice(bi, 1); score += 100;
-                    }
-                });
-            });
+function gameLoop() { 
+    if (gameRunning || particles.length > 0) {
+        update(); draw(); animationId = requestAnimationFrame(gameLoop); 
+    }
+}
 
-            bombs.forEach((bomb, i) => {
-                bomb.y += bomb.speed;
-                if (bomb.x < player.x + 15 && bomb.x + bomb.width > player.x - 15 && bomb.y < player.y + 55 && bomb.y + bomb.height > player.y - 15) {
-                    gameRunning = false;
-                    triggerDeath();
-                }
-                if (bomb.y > canvas.height) { bombs.splice(i, 1); score += 10; }
-            });
-
-            particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
-            document.getElementById('score').textContent = score;
-        }
-
-        function triggerDeath() {
-            flashOpacity = 1;
-            failSound.play().catch(e => {});
-            for(let i=0; i<80; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
-            submitScore(username, score);
-            setTimeout(() => {
-                document.getElementById('finalScore').innerHTML = `YOUR SCORE: ${score}`;
-                document.getElementById('gameOver').style.display = 'block';
-            }, 800);
-        }
-
-        function draw() {
-            ctx.fillStyle = '#3d3329'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            if (gameRunning) drawStickman(player.x, player.y);
-            bombs.forEach(b => drawBomb(b));
-            baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - b.size/2, b.y - b.size/2, b.size, b.size));
-            particles.forEach(p => {
-                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
-            });
-            ctx.globalAlpha = 1.0;
-            if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); flashOpacity -= 0.05; }
-        }
-
-        function gameLoop() { 
-            if (gameRunning || particles.length > 0) {
-                update(); draw(); animationId = requestAnimationFrame(gameLoop); 
-            }
-        }
-
-        function restartGame() {
-            cancelAnimationFrame(animationId);
-            document.getElementById('gameOver').style.display = 'none';
-            initGameValues();
-            gameLoop();
-        }
-    </script>
-</body>
-</html>
+function restartGame() {
+    cancelAnimationFrame(animationId);
+    document.getElementById('gameOver').style.display = 'none';
+    initGameValues();
+    gameLoop();
+}
