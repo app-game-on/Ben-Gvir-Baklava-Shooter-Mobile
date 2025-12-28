@@ -56,7 +56,7 @@
             margin-top: 10px; padding: 12px 25px; font-size: 18px; 
             background: #ff4444; color: #fff; border: none; border-radius: 10px;
         }
-        #debugStatus { font-size: 10px; color: #666; margin-top: 10px; }
+        #statusMsg { font-size: 12px; color: #888; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -81,11 +81,11 @@
         <table class="leaderboard">
             <thead><tr><th>RANK</th><th>PLAYER</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody">
-                <tr><td colspan="3">Connecting...</td></tr>
+                <tr><td colspan="3">Loading...</td></tr>
             </tbody>
         </table>
+        <div id="statusMsg"></div>
         <button onclick="restartGame()">RETRY</button>
-        <div id="debugStatus">Ready</div>
     </div>
     
     <canvas id="gameCanvas"></canvas>
@@ -118,63 +118,6 @@
         window.addEventListener('resize', resize);
         resize();
 
-        function updateDebug(msg) { document.getElementById('debugStatus').innerText = "Status: " + msg; }
-
-        function fetchOnlineScores() {
-            const body = document.getElementById('leaderboardBody');
-            updateDebug("Requesting scores...");
-            
-            const oldScript = document.getElementById('dreamloScript');
-            if (oldScript) oldScript.remove();
-
-            const script = document.createElement('script');
-            script.id = 'dreamloScript';
-            // Added cache buster to URL to force browser to update
-            script.src = `https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/jsonp?callback=displayScores&t=${Date.now()}`;
-            
-            script.onerror = function() {
-                updateDebug("Browser Blocked Connection");
-                body.innerHTML = "<tr><td colspan='3'>Security Block: Try Google Chrome</td></tr>";
-            };
-            
-            document.body.appendChild(script);
-        }
-
-        window.displayScores = function(data) {
-            const body = document.getElementById('leaderboardBody');
-            updateDebug("Scores Received");
-            
-            if (!data || !data.dreamlo || !data.dreamlo.leaderboard) {
-                body.innerHTML = "<tr><td colspan='3'>Be the first to score!</td></tr>";
-                return;
-            }
-
-            let scoreList = data.dreamlo.leaderboard.entry;
-            if (!scoreList) {
-                body.innerHTML = "<tr><td colspan='3'>No scores found</td></tr>";
-                return;
-            }
-
-            if (!Array.isArray(scoreList)) scoreList = [scoreList];
-
-            body.innerHTML = "";
-            scoreList.forEach((s, i) => {
-                if (i < 5) {
-                    body.innerHTML += `<tr><td class="${i===0?'gold':''}">${i+1}</td><td class="${i===0?'gold':''}">${s.name}</td><td>${parseInt(s.score).toLocaleString()}</td></tr>`;
-                }
-            });
-        };
-
-        function submitScore(name, finalScore) {
-            updateDebug("Saving score...");
-            const pinger = new Image();
-            // This is the most reliable way for local files to talk to servers
-            pinger.src = `https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}?t=${Date.now()}`;
-            
-            pinger.onload = () => { updateDebug("Score Saved!"); setTimeout(fetchOnlineScores, 500); };
-            pinger.onerror = () => { updateDebug("Network Error (Still trying...)"); setTimeout(fetchOnlineScores, 1500); };
-        }
-
         function startGame() {
             const input = document.getElementById('usernameInput').value;
             if (input.trim() === "") return alert("Enter a name!");
@@ -182,6 +125,61 @@
             document.getElementById('loginScreen').style.display = 'none';
             initGameValues();
             gameLoop();
+        }
+
+        // --- NEW "PIPE MODE" LOGIC (Text Based) ---
+        async function fetchOnlineScores() {
+            const body = document.getElementById('leaderboardBody');
+            document.getElementById('statusMsg').innerText = "Fetching scores...";
+            
+            // We use 'pipe' format which is just text, easier for browsers to handle
+            const proxy = "https://api.allorigins.win/raw?url=";
+            const target = encodeURIComponent(`http://dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/pipe`);
+            
+            try {
+                const response = await fetch(proxy + target);
+                const text = await response.text();
+                
+                if (!text || text.trim() === "") {
+                    body.innerHTML = "<tr><td colspan='3'>Be the first to score!</td></tr>";
+                    document.getElementById('statusMsg').innerText = "Leaderboard Empty";
+                    return;
+                }
+
+                // Parse the pipe text manually: Name|Score|Seconds
+                const lines = text.split("\n");
+                let html = "";
+                let count = 0;
+                
+                for(let line of lines) {
+                    if(line.trim() === "") continue;
+                    const parts = line.split("|");
+                    if(parts.length >= 2) {
+                        count++;
+                        if(count > 5) break; // Top 5 only
+                        const name = parts[0];
+                        const scoreVal = parseInt(parts[1]).toLocaleString();
+                        html += `<tr><td class="${count===1?'gold':''}">${count}</td><td class="${count===1?'gold':''}">${name}</td><td>${scoreVal}</td></tr>`;
+                    }
+                }
+                
+                body.innerHTML = html;
+                document.getElementById('statusMsg').innerText = "Updated just now";
+                
+            } catch (err) {
+                body.innerHTML = "<tr><td colspan='3'>Server Busy</td></tr>";
+                document.getElementById('statusMsg').innerText = "Using Local Storage Mode";
+            }
+        }
+
+        function submitScore(name, finalScore) {
+            // Invisible image ping (Reliable)
+            const pinger = new Image();
+            pinger.src = `https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`;
+            document.getElementById('statusMsg').innerText = "Saving...";
+            
+            // Wait 1.5 seconds then fetch
+            setTimeout(fetchOnlineScores, 1500);
         }
 
         function initGameValues() {
