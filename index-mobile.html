@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter - Balanced</title>
+    <title>Baklava Shooter - Unique Leaderboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { 
@@ -77,7 +77,7 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore"></div>
-        <h3>TOP SCORES</h3>
+        <h3>TOP RANKINGS</h3>
         <table class="leaderboard">
             <thead><tr><th>NAME</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody"></tbody>
@@ -116,17 +116,31 @@
         function startGame() {
             const input = document.getElementById('usernameInput').value;
             if (input.trim() === "") return alert("Enter a name!");
-            username = input.toUpperCase();
+            username = input.toUpperCase().trim();
             document.getElementById('loginScreen').style.display = 'none';
             gameRunning = true;
             gameLoop();
         }
 
+        // --- UNIQUE LEADERBOARD LOGIC ---
         function saveScore(name, finalScore) {
             let scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
-            scores.push({ name: name, score: finalScore });
+            
+            // Find if player already exists
+            const existingEntryIndex = scores.findIndex(s => s.name === name);
+            
+            if (existingEntryIndex !== -1) {
+                // Only update if the new score is higher
+                if (finalScore > scores[existingEntryIndex].score) {
+                    scores[existingEntryIndex].score = finalScore;
+                }
+            } else {
+                // Add new player
+                scores.push({ name: name, score: finalScore });
+            }
+
             scores.sort((a, b) => b.score - a.score);
-            scores = scores.slice(0, 5);
+            scores = scores.slice(0, 5); // Keep top 5 unique players
             localStorage.setItem('baklavaScores', JSON.stringify(scores));
             displayLeaderboard();
         }
@@ -134,7 +148,7 @@
         function displayLeaderboard() {
             const scores = JSON.parse(localStorage.getItem('baklavaScores')) || [];
             const body = document.getElementById('leaderboardBody');
-            body.innerHTML = scores.map((s, i) => `<tr><td class="${i===0?'gold':''}">${s.name}</td><td>${s.score}</td></tr>`).join('');
+            body.innerHTML = scores.map((s, i) => `<tr><td class="${i===0?'gold':''}">${s.name}</td><td>${s.score.toLocaleString()}</td></tr>`).join('');
         }
 
         canvas.addEventListener('touchstart', handleTouch, {passive: false});
@@ -173,11 +187,15 @@
 
             ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
             ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+            
             ctx.beginPath();
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Spine
-            ctx.moveTo(x, y + 35); ctx.lineTo(x - 20, y + 45 + swing); // Arms
+            // Spine
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); 
+            // Arms (Hands)
+            ctx.moveTo(x, y + 35); ctx.lineTo(x - 20, y + 45 + swing); 
             ctx.moveTo(x, y + 35); ctx.lineTo(x + 20, y + 45 - swing);
-            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Legs
+            // Legs
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); 
             ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
             ctx.stroke();
         }
@@ -228,7 +246,9 @@
             failSound.play().catch(e => {});
             if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
             for(let i=0; i<100; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
+            
             saveScore(username, score);
+            
             setTimeout(() => {
                 document.getElementById('finalScore').innerHTML = `SCORE: ${score}`;
                 document.getElementById('gameOver').style.display = 'block';
