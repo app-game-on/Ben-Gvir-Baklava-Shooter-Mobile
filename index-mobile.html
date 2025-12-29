@@ -56,6 +56,7 @@
             margin-top: 10px; padding: 12px 25px; font-size: 18px; 
             background: #ff4444; color: #fff; border: none; border-radius: 10px;
         }
+        #statusMsg { font-size: 12px; color: #aaa; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -80,9 +81,10 @@
         <table class="leaderboard">
             <thead><tr><th>RANK</th><th>PLAYER</th><th>SCORE</th></tr></thead>
             <tbody id="leaderboardBody">
-                <tr><td colspan="3">Loading...</td></tr>
+                <tr><td colspan="3">Connecting...</td></tr>
             </tbody>
         </table>
+        <div id="statusMsg"></div>
         <button onclick="restartGame()">RETRY</button>
     </div>
     
@@ -125,9 +127,14 @@
             gameLoop();
         }
 
-        // --- WEB READY SCORE FETCHING ---
+        // --- PRODUCTION READY LEADERBOARD ---
+        let loadTimeout;
+
         window.dreamloCallback = function(data) {
+            clearTimeout(loadTimeout); // Stop the safety timer
             const body = document.getElementById('leaderboardBody');
+            document.getElementById('statusMsg').innerText = "Live Scores Loaded";
+
             if (!data || !data.dreamlo || !data.dreamlo.leaderboard) {
                 body.innerHTML = "<tr><td colspan='3'>No scores yet!</td></tr>";
                 return;
@@ -143,16 +150,26 @@
         };
 
         function fetchOnlineScores() {
+            const body = document.getElementById('leaderboardBody');
+            
+            // 1. Create the script to get data
             const script = document.createElement('script');
-            // Adding timestamp (?t=) stops the browser from saving old scores
             script.src = `https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/jsonp?callback=dreamloCallback&t=${Date.now()}`;
             document.body.appendChild(script);
+
+            // 2. Start a Safety Timer (Catches the "Frozen" state)
+            loadTimeout = setTimeout(() => {
+                body.innerHTML = "<tr><td colspan='3'>⚠️ UPLOAD GAME TO SEE SCORES</td></tr>";
+                document.getElementById('statusMsg').innerText = "Browser blocked the connection (Security Rule)";
+            }, 3000);
         }
 
         function submitScore(name, finalScore) {
+            document.getElementById('statusMsg').innerText = "Sending Score...";
             const pinger = new Image();
             pinger.src = `https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`;
-            // Wait 1s for the server to save, then refresh
+            
+            // Wait 1s for the server to save, then try to fetch
             setTimeout(fetchOnlineScores, 1000);
         }
 
