@@ -105,9 +105,10 @@
         let animationId;
         let score = 0, secondsElapsed = 0, totalFrames = 0, ammo = 3, flashOpacity = 0;
         let bombs = [], baklavas = [], particles = [];
-        let keys = {w:false, a:false, s:false, d:false};
-
-        const player = { x: 0, y: 0, speed: 7, walkCycle: 0 };
+        
+        // Touch state
+        let moveTarget = null;
+        const player = { x: 0, y: 0, speed: 8, walkCycle: 0 };
         const FIXED_BOMB_SPEED = 4.2;
 
         function resize() {
@@ -118,20 +119,8 @@
         window.addEventListener('resize', resize);
         resize();
 
-        function startGame() {
-            const input = document.getElementById('usernameInput').value;
-            if (input.trim() === "") return alert("Enter a name!");
-            username = input.toUpperCase().trim().replace(/[^A-Z0-9]/g, ""); 
-            document.getElementById('loginScreen').style.display = 'none';
-            initGameValues();
-            gameLoop();
-        }
-
-        // --- PRODUCTION READY LEADERBOARD ---
-        let loadTimeout;
-
+        // --- BACKGROUND LEADERBOARD (Doesn't freeze game) ---
         window.dreamloCallback = function(data) {
-            clearTimeout(loadTimeout); // Stop the safety timer
             const body = document.getElementById('leaderboardBody');
             document.getElementById('statusMsg').innerText = "Live Scores Loaded";
 
@@ -150,27 +139,25 @@
         };
 
         function fetchOnlineScores() {
-            const body = document.getElementById('leaderboardBody');
-            
-            // 1. Create the script to get data
             const script = document.createElement('script');
             script.src = `https://www.dreamlo.com/lb/${DREAMLO_PUBLIC_CODE}/jsonp?callback=dreamloCallback&t=${Date.now()}`;
             document.body.appendChild(script);
-
-            // 2. Start a Safety Timer (Catches the "Frozen" state)
-            loadTimeout = setTimeout(() => {
-                body.innerHTML = "<tr><td colspan='3'>⚠️ UPLOAD GAME TO SEE SCORES</td></tr>";
-                document.getElementById('statusMsg').innerText = "Browser blocked the connection (Security Rule)";
-            }, 3000);
         }
 
         function submitScore(name, finalScore) {
-            document.getElementById('statusMsg').innerText = "Sending Score...";
-            const pinger = new Image();
-            pinger.src = `https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add/${name}/${finalScore}`;
-            
-            // Wait 1s for the server to save, then try to fetch
-            setTimeout(fetchOnlineScores, 1000);
+            document.getElementById('statusMsg').innerText = "Syncing Score...";
+            const script = document.createElement('script');
+            script.src = `https://www.dreamlo.com/lb/${DREAMLO_PRIVATE_CODE}/add-jsonp/${name}/${finalScore}?callback=fetchOnlineScores`;
+            document.body.appendChild(script);
+        }
+
+        function startGame() {
+            const input = document.getElementById('usernameInput').value;
+            if (input.trim() === "") return alert("Enter a name!");
+            username = input.toUpperCase().trim().replace(/[^A-Z0-9]/g, ""); 
+            document.getElementById('loginScreen').style.display = 'none';
+            initGameValues();
+            gameLoop();
         }
 
         function initGameValues() {
@@ -181,20 +168,19 @@
             document.getElementById('ammo').textContent = "3";
         }
 
-        canvas.addEventListener('touchstart', handleTouch, {passive: false});
-        canvas.addEventListener('touchmove', handleTouch, {passive: false});
-        canvas.addEventListener('touchend', () => { keys.a = keys.d = keys.w = keys.s = false; });
+        // SMOOTH MOVEMENT CONTROLS
+        canvas.addEventListener('touchstart', (e) => {
+            const t = e.touches[0];
+            moveTarget = { x: t.clientX, y: t.clientY };
+        }, {passive: false});
 
-        function handleTouch(e) {
-            if (!gameRunning) return;
+        canvas.addEventListener('touchmove', (e) => {
             e.preventDefault();
-            const touch = e.touches[0];
-            const bodyY = player.y + 40;
-            const dx = touch.clientX - player.x;
-            const dy = touch.clientY - bodyY;
-            keys.a = dx < -25; keys.d = dx > 25;
-            keys.w = dy < -25; keys.s = dy > 25;
-        }
+            const t = e.touches[0];
+            moveTarget = { x: t.clientX, y: t.clientY };
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', () => { moveTarget = null; });
 
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
             e.stopPropagation();
@@ -207,17 +193,22 @@
 
         function drawStickman(x, y) {
             const headSize = 45;
-            const isMoving = keys.a || keys.d || keys.w || keys.s;
-            player.walkCycle += isMoving ? 0.2 : 0;
+            const isMoving = moveTarget !== null;
+            player.walkCycle += isMoving ? 0.25 : 0;
             const swing = Math.sin(player.walkCycle) * 15;
-            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4;
+            
+            ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+            
+            // Draw Head
             ctx.drawImage(headImg, x - headSize/2, y - headSize/2, headSize, headSize);
+            
+            // Draw Full Body
             ctx.beginPath();
-            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); 
-            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); 
-            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing);
-            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); 
-            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing);
+            ctx.moveTo(x, y + 25); ctx.lineTo(x, y + 55); // Spine
+            ctx.moveTo(x, y + 35); ctx.lineTo(x - 22, y + 45 + swing); // Left Arm
+            ctx.moveTo(x, y + 35); ctx.lineTo(x + 22, y + 45 - swing); // Right Arm
+            ctx.moveTo(x, y + 55); ctx.lineTo(x - 12, y + 80 + swing); // Left Leg
+            ctx.moveTo(x, y + 55); ctx.lineTo(x + 12, y + 80 - swing); // Right Leg
             ctx.stroke();
         }
 
@@ -246,10 +237,14 @@
                 secondsElapsed++;
                 if (secondsElapsed % 4 === 0) { ammo++; document.getElementById('ammo').textContent = ammo; }
             }
-            if (keys.a && player.x > 30) player.x -= player.speed;
-            if (keys.d && player.x < canvas.width - 30) player.x += player.speed;
-            if (keys.w && player.y > 30) player.y -= player.speed;
-            if (keys.s && player.y < canvas.height - 120) player.y += player.speed;
+
+            // Smooth Target Following
+            if (moveTarget) {
+                const dx = moveTarget.x - player.x;
+                const dy = (moveTarget.y - 40) - player.y;
+                if (Math.abs(dx) > 5) player.x += dx * 0.15;
+                if (Math.abs(dy) > 5) player.y += dy * 0.15;
+            }
 
             let spawnRate = Math.max(8, Math.floor((35 - Math.floor(secondsElapsed / 8)) / 1.5));
             if (totalFrames % spawnRate === 0) {
@@ -285,7 +280,7 @@
             failSound.play().catch(e => {});
             for(let i=0; i<80; i++) particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*25, vy: (Math.random()-0.5)*25, life: 60, color: i%2?'#ff4400':'#ffffff', size: 2+Math.random()*6 });
             
-            document.getElementById('leaderboardBody').innerHTML = "<tr><td colspan='3'>Updating...</td></tr>";
+            document.getElementById('leaderboardBody').innerHTML = "<tr><td colspan='3'>Syncing...</td></tr>";
             submitScore(username, score);
             
             setTimeout(() => {
