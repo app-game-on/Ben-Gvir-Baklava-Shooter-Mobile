@@ -42,7 +42,6 @@
     <canvas id="gameCanvas"></canvas>
     
     <script>
-        // YOUR LIVE GOOGLE SCRIPT URL
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3JYh1ebRrvFZP0zNVLRcjtfv7wi7dZxMCb0uNOvtj7cSyE8FQVz9Dp_KOzFfg4H45/exec";
 
         const canvas = document.getElementById('gameCanvas');
@@ -64,14 +63,11 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- GLOBAL GOOGLE SHEETS LOGIC ---
         async function syncGlobalScores(name, finalScore) {
             const body = document.getElementById('leaderboardBody');
             try {
-                // This sends your score and gets the Top 5 back in one request
                 const response = await fetch(`${SCRIPT_URL}?name=${encodeURIComponent(name)}&score=${finalScore}`);
                 const data = await response.json();
-                
                 body.innerHTML = "";
                 if (data.length === 0) {
                     body.innerHTML = "<tr><td>No scores yet!</td></tr>";
@@ -83,12 +79,10 @@
                     });
                 }
             } catch (err) {
-                console.error(err);
-                body.innerHTML = "<tr><td>Check Spreadsheet Permissions</td></tr>";
+                body.innerHTML = "<tr><td>Error syncing scores.</td></tr>";
             }
         }
 
-        // --- GAME CONTROL ---
         function runGame() {
             if (loopId) cancelAnimationFrame(loopId);
             gameRunning = true;
@@ -106,9 +100,7 @@
             runGame();
         };
 
-        document.getElementById('retryBtn').onclick = () => {
-            runGame();
-        };
+        document.getElementById('retryBtn').onclick = () => { runGame(); };
 
         canvas.addEventListener('touchstart', (e) => { moveTarget = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
         canvas.addEventListener('touchmove', (e) => { e.preventDefault(); moveTarget = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, {passive: false});
@@ -132,7 +124,6 @@
             document.getElementById('finalScore').innerText = "SCORE: " + score;
             document.getElementById('gameOver').style.display = 'block';
             document.getElementById('leaderboardBody').innerHTML = "<tr><td>Updating Global Board...</td></tr>";
-            
             syncGlobalScores(username, score);
         }
 
@@ -141,23 +132,43 @@
             if (flashOpacity > 0) flashOpacity -= 0.04;
             particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
             if (!gameRunning) return;
+            
             totalFrames++;
-            if (totalFrames % 150 === 0) { ammo++; document.getElementById('ammo').innerText = ammo; }
+
+            // Ammo refill: Exactly 6 seconds (60fps * 6 = 360)
+            if (totalFrames % 360 === 0) { 
+                ammo++; 
+                document.getElementById('ammo').innerText = ammo; 
+            }
+
             if (moveTarget) {
                 player.x += (moveTarget.x - player.x) * 0.45;
                 player.y += (moveTarget.y - 40 - player.y) * 0.45;
                 player.walkCycle += 0.35;
             }
-            if (totalFrames % 16 === 0) bombs.push({ x: Math.random()*(canvas.width-40), y: -60 });
+
+            // Bomb Spawn Distribution Fix
+            if (totalFrames % 16 === 0) {
+                const bombSize = 40;
+                // random position across the whole width including edges
+                const randomX = Math.random() * (canvas.width - bombSize);
+                bombs.push({ x: randomX, y: -60 });
+            }
+
             bombs.forEach((b, i) => {
                 b.y += 5.5;
                 if (Math.abs(b.x + 20 - player.x) < 35 && Math.abs(b.y + 20 - player.y) < 65) triggerDeath();
                 if (b.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
+
             baklavas.forEach((b, bi) => {
                 b.y -= 22;
                 bombs.forEach((bomb, mi) => {
-                    if (Math.abs(b.x - (bomb.x + 20)) < 40 && Math.abs(b.y - (bomb.y + 20)) < 40) { bombs.splice(mi, 1); baklavas.splice(bi, 1); score += 100; }
+                    if (Math.abs(b.x - (bomb.x + 20)) < 40 && Math.abs(b.y - (bomb.y + 20)) < 40) { 
+                        bombs.splice(mi, 1); 
+                        baklavas.splice(bi, 1); 
+                        score += 100; 
+                    }
                 });
             });
             document.getElementById('score').innerText = score;
