@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter</title>
+    <title>Baklava Shooter Global</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { overflow: hidden; font-family: sans-serif; background: #1a1410; position: fixed; width: 100%; height: 100%; }
         #gameCanvas { display: block; }
         #loginScreen { position: absolute; inset: 0; background: #1a1410; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; }
         #loginScreen input { padding: 15px; font-size: 18px; border-radius: 8px; margin: 20px 0; width: 80%; max-width: 300px; text-align: center; border: none; }
-        #loginScreen button { padding: 15px 40px; font-size: 20px; background: #ffcc00; border: none; border-radius: 8px; font-weight: bold; }
+        #loginScreen button { padding: 15px 40px; font-size: 20px; background: #ffcc00; border: none; border-radius: 8px; font-weight: bold; color: #000; }
         #ui { position: absolute; top: 10px; right: 10px; text-align: right; color: #fff; font-weight: bold; z-index: 10; pointer-events: none; text-shadow: 2px 2px 2px #000; }
         #fireBtn { position: absolute; bottom: 40px; left: 25px; width: 95px; height: 95px; border-radius: 50%; background: rgba(255, 68, 68, 0.7); border: 3px solid white; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; z-index: 15; font-size: 20px; }
         #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #fff; display: none; z-index: 20; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px; border: 4px solid #ff4444; width: 90%; max-width: 400px; }
@@ -24,8 +24,8 @@
 
     <div id="loginScreen">
         <h1 style="color:#ffcc00;">BAKLAVA SHOOTER</h1>
-        <input type="text" id="usernameInput" placeholder="NAME..." maxlength="12">
-        <button id="startBtn">START GAME</button>
+        <input type="text" id="usernameInput" placeholder="ENTER NAME..." maxlength="12">
+        <button id="startBtn">PLAY GLOBAL</button>
     </div>
 
     <div id="ui">SCORE: <span id="score">0</span><br><span style="color:#ffcc00">AMMO: <span id="ammo">3</span></span></div>
@@ -34,16 +34,16 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore" style="font-size: 22px; margin: 10px 0;"></div>
-        <h3 style="color:#ffcc00;">TOP 5 WORLDWIDE</h3>
-        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Syncing...</td></tr></tbody></table>
+        <h3 style="color:#ffcc00;">GLOBAL TOP 5</h3>
+        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Connecting to Google...</td></tr></tbody></table>
         <button id="retryBtn">RETRY</button>
     </div>
     
     <canvas id="gameCanvas"></canvas>
     
     <script>
-        const PUBLIC_KEY = "695245138f40bbcf806d2a88";
-        const PRIVATE_KEY = "ZQQy-HPvm0mPUknGMwnqdwrpca33A7Pk-ol8hCs52JHg";
+        // YOUR LIVE GOOGLE SCRIPT URL
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3JYh1ebRrvFZP0zNVLRcjtfv7wi7dZxMCb0uNOvtj7cSyE8FQVz9Dp_KOzFfg4H45/exec";
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -64,39 +64,28 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- THE "GHOST SCRIPT" METHOD ---
-        window.dreamloCallback = function(data) {
+        // --- GLOBAL GOOGLE SHEETS LOGIC ---
+        async function syncGlobalScores(name, finalScore) {
             const body = document.getElementById('leaderboardBody');
-            if (!data?.dreamlo?.leaderboard) {
-                body.innerHTML = "<tr><td>No global scores yet!</td></tr>";
-                return;
+            try {
+                // This sends your score and gets the Top 5 back in one request
+                const response = await fetch(`${SCRIPT_URL}?name=${encodeURIComponent(name)}&score=${finalScore}`);
+                const data = await response.json();
+                
+                body.innerHTML = "";
+                if (data.length === 0) {
+                    body.innerHTML = "<tr><td>No scores yet!</td></tr>";
+                } else {
+                    data.forEach((entry, i) => {
+                        body.innerHTML += `<tr class="${i === 0 ? 'gold' : ''}">
+                            <td>#${i+1}</td><td>${entry[0]}</td><td>${entry[1]}</td>
+                        </tr>`;
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                body.innerHTML = "<tr><td>Check Spreadsheet Permissions</td></tr>";
             }
-            let list = data.dreamlo.leaderboard.entry;
-            let scoresArray = Array.isArray(list) ? list : [list];
-            body.innerHTML = "";
-            scoresArray.slice(0, 5).forEach((entry, i) => {
-                body.innerHTML += `<tr class="${i === 0 ? 'gold' : ''}"><td>#${i+1}</td><td>${entry.name}</td><td>${entry.score}</td></tr>`;
-            });
-        };
-
-        function fetchGlobalScores() {
-            const old = document.getElementById('dl-fetch');
-            if(old) old.remove();
-            
-            const s = document.createElement('script');
-            s.id = 'dl-fetch';
-            // Notice the "https" and the "jsonp" format
-            s.src = `https://www.dreamlo.com/lb/${PUBLIC_KEY}/jsonp?callback=dreamloCallback&_=${Date.now()}`;
-            document.body.appendChild(s);
-        }
-
-        function submitGlobalScore(name, finalScore) {
-            const s = document.createElement('script');
-            s.src = `https://www.dreamlo.com/lb/${PRIVATE_KEY}/add-jsonp/${name}/${finalScore}`;
-            document.body.appendChild(s);
-            
-            // Wait for the script to "hit" the server, then fetch the new list
-            setTimeout(fetchGlobalScores, 2000);
         }
 
         // --- GAME CONTROL ---
@@ -142,8 +131,9 @@
             }
             document.getElementById('finalScore').innerText = "SCORE: " + score;
             document.getElementById('gameOver').style.display = 'block';
-            document.getElementById('leaderboardBody').innerHTML = "<tr><td>Saving...</td></tr>";
-            submitGlobalScore(username, score);
+            document.getElementById('leaderboardBody').innerHTML = "<tr><td>Updating Global Board...</td></tr>";
+            
+            syncGlobalScores(username, score);
         }
 
         function update() {
