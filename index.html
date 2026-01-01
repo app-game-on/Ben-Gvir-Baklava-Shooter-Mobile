@@ -3,7 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Baklava Shooter Global</title>
+    
+    <title>Ben Gvir Shooter - Baklava Arcade Game</title>
+    <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge bombs, and compete for the top score on the global leaderboard!">
+    <meta name="keywords" content="Ben Gvir Shooter, Baklava Game, Online Arcade, Leaderboard Game, bengvirshooter">
+    
+    <meta property="og:title" content="Ben Gvir Shooter">
+    <meta property="og:description" content="Can you get the high score? Play the Baklava Shooter now!">
+    <meta property="og:url" content="https://bengvirshooter.com">
+    <meta property="og:image" content="https://bengvirshooter.com/baklava.png">
+
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { overflow: hidden; font-family: sans-serif; background: #1a1410; position: fixed; width: 100%; height: 100%; }
@@ -20,7 +29,7 @@
         .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
         .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
         .gold { color: #ffcc00; font-weight: bold; }
-        button.actionBtn { margin-top: 10px; padding: 12px 25px; background: #ff4444; color: #fff; border: none; border-radius: 10px; font-weight: bold; }
+        button.actionBtn { margin-top: 10px; padding: 12px 25px; background: #ff4444; color: #fff; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
         #resumeBtn { background: #ffcc00; color: #000; }
     </style>
 </head>
@@ -32,25 +41,28 @@
     </div>
 
     <div id="loginScreen">
-        <h1 style="color:#ffcc00;">BAKLAVA SHOOTER</h1>
+        <h1 style="color:#ffcc00;">BEN GVIR SHOOTER</h1>
         <input type="text" id="usernameInput" placeholder="ENTER NAME..." maxlength="12">
         <button id="startBtn">PLAY GLOBAL</button>
     </div>
 
     <div id="pauseOverlay">
         <h1 style="color: #ffcc00;">PAUSED</h1>
-        <p style="margin: 10px 0;">Take a breath!</p>
         <button id="resumeBtn" class="actionBtn">RESUME</button>
     </div>
 
-    <div id="ui">SCORE: <span id="score">0</span><br><span style="color:#ffcc00">AMMO: <span id="ammo">3</span></span></div>
+    <div id="ui">
+        SCORE: <span id="score">0</span><br>
+        <span id="comboText" style="color:#ffcc00; display:none;">COMBO: x<span id="comboVal">1</span></span><br>
+        <span style="color:#ffcc00">AMMO: <span id="ammo">3</span></span>
+    </div>
     <div id="fireBtn">FIRE</div>
 
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore" style="font-size: 22px; margin: 10px 0;"></div>
         <h3 style="color:#ffcc00;">GLOBAL TOP 5</h3>
-        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Connecting to Google...</td></tr></tbody></table>
+        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Connecting...</td></tr></tbody></table>
         <button id="retryBtn" class="actionBtn">RETRY</button>
     </div>
     
@@ -68,6 +80,7 @@
         let isMuted = false, isPaused = false;
         let username = "", gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
+        let combo = 0, comboTimer = 0;
         let bombs = [], baklavas = [], particles = [], moveTarget = null;
         const player = { x: 0, y: 0, walkCycle: 0 };
 
@@ -79,7 +92,6 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- CONTROLS ---
         document.getElementById('muteBtn').onclick = (e) => {
             isMuted = !isMuted;
             document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊";
@@ -112,13 +124,14 @@
             if (loopId) cancelAnimationFrame(loopId);
             gameRunning = true; isPaused = false;
             score = 0; ammo = 3; totalFrames = 0; flashOpacity = 0; shake = 0;
+            combo = 0; comboTimer = 0;
             bombs = []; baklavas = []; particles = [];
             document.getElementById('score').innerText = "0";
             document.getElementById('ammo').innerText = "3";
+            document.getElementById('comboText').style.display = 'none';
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('pauseOverlay').style.display = 'none';
             document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('pauseBtn').innerText = "⏸";
             gameLoop();
         }
 
@@ -148,7 +161,6 @@
             }
             document.getElementById('finalScore').innerText = "SCORE: " + score;
             document.getElementById('gameOver').style.display = 'block';
-            document.getElementById('leaderboardBody').innerHTML = "<tr><td>Updating...</td></tr>";
             syncGlobalScores(username, score);
         }
 
@@ -156,11 +168,18 @@
             if (isPaused) return;
             if (shake > 0) shake *= 0.85;
             if (flashOpacity > 0) flashOpacity -= 0.04;
+            
+            if (comboTimer > 0) {
+                comboTimer--;
+            } else {
+                combo = 0;
+                document.getElementById('comboText').style.display = 'none';
+            }
+
             particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
             if (!gameRunning) return;
             
             totalFrames++;
-
             if (totalFrames % 360 === 0) { ammo++; document.getElementById('ammo').innerText = ammo; }
 
             if (moveTarget) {
@@ -169,11 +188,9 @@
                 player.walkCycle += 0.35;
             }
 
-            // PROGRESSIVE DIFFICULTY
-            // Increase speed based on score: starts at 5.5, goes up +0.5 every 1000 pts
+            // DYNAMIC DIFFICULTY
             let bombSpeed = 5.5 + (score / 2000);
-            // Spawn frequency: starts every 16 frames, gets faster as score goes up
-            let spawnRate = Math.max(6, 16 - Math.floor(score / 1500));
+            let spawnRate = Math.max(7, 16 - Math.floor(score / 1500));
 
             if (totalFrames % spawnRate === 0) {
                 const bombSize = 40;
@@ -193,9 +210,16 @@
                 b.y -= 12;
                 bombs.forEach((bomb, mi) => {
                     if (Math.abs(b.x - (bomb.x + 20)) < 40 && Math.abs(b.y - (bomb.y + 20)) < 40) { 
-                        bombs.splice(mi, 1); baklavas.splice(bi, 1); score += 100; 
+                        bombs.splice(mi, 1); baklavas.splice(bi, 1); 
+                        combo++;
+                        comboTimer = 180;
+                        shake = 12;
+                        score += (100 * combo);
+                        document.getElementById('comboVal').innerText = combo;
+                        document.getElementById('comboText').style.display = 'block';
                     }
                 });
+                if (b.y < -20) { baklavas.splice(bi, 1); combo = 0; }
             });
             document.getElementById('score').innerText = score;
         }
@@ -203,11 +227,16 @@
         function draw() {
             ctx.save();
             if (shake > 1) ctx.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2);
-            ctx.fillStyle = '#3d3329'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Background TENSION (Turns redder as score goes up)
+            let redIntensity = Math.min(120, score / 100);
+            ctx.fillStyle = `rgb(${61 + redIntensity}, 51, 41)`; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
             if (gameRunning || isPaused) {
+                ctx.drawImage(headImg, player.x - 25, player.y - 25, 50, 50);
                 const sw = Math.sin(player.walkCycle) * 18;
                 ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-                ctx.drawImage(headImg, player.x - 25, player.y - 25, 50, 50);
                 ctx.beginPath();
                 ctx.moveTo(player.x, player.y + 25); ctx.lineTo(player.x, player.y + 60);
                 ctx.moveTo(player.x, player.y + 40); ctx.lineTo(player.x - 25, player.y + 50 + sw);
@@ -230,8 +259,7 @@
         }
 
         function gameLoop() {
-            update();
-            draw();
+            update(); draw();
             loopId = requestAnimationFrame(gameLoop);
         }
     </script>
