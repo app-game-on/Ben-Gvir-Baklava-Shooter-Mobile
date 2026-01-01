@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+     <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,6 +12,7 @@
         #loginScreen input { padding: 15px; font-size: 18px; border-radius: 8px; margin: 20px 0; width: 80%; max-width: 300px; text-align: center; border: none; }
         #loginScreen button { padding: 15px 40px; font-size: 20px; background: #ffcc00; border: none; border-radius: 8px; font-weight: bold; color: #000; }
         #ui { position: absolute; top: 10px; right: 10px; text-align: right; color: #fff; font-weight: bold; z-index: 10; pointer-events: none; text-shadow: 2px 2px 2px #000; }
+        #muteBtn { position: absolute; top: 15px; left: 15px; width: 45px; height: 45px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 8px; display: flex; align-items: center; justify-content: center; z-index: 50; font-size: 24px; color: white; cursor: pointer; }
         #fireBtn { position: absolute; bottom: 40px; left: 25px; width: 95px; height: 95px; border-radius: 50%; background: rgba(255, 68, 68, 0.7); border: 3px solid white; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; z-index: 15; font-size: 20px; }
         #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #fff; display: none; z-index: 20; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px; border: 4px solid #ff4444; width: 90%; max-width: 400px; }
         .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
@@ -21,6 +22,8 @@
     </style>
 </head>
 <body>
+
+    <div id="muteBtn">🔊</div>
 
     <div id="loginScreen">
         <h1 style="color:#ffcc00;">BAKLAVA SHOOTER</h1>
@@ -50,6 +53,7 @@
         const baklavaImg = new Image(); baklavaImg.src = 'baklava.png';
         const failSound = new Audio('fail_sound.mp3');
 
+        let isMuted = false;
         let username = "", gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
         let bombs = [], baklavas = [], particles = [], moveTarget = null;
@@ -62,6 +66,14 @@
         }
         window.addEventListener('resize', resize);
         resize();
+
+        // --- MUTE LOGIC ---
+        document.getElementById('muteBtn').onclick = (e) => {
+            isMuted = !isMuted;
+            document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊";
+            document.getElementById('muteBtn').style.color = isMuted ? "#ff4444" : "white";
+            e.stopPropagation();
+        };
 
         async function syncGlobalScores(name, finalScore) {
             const body = document.getElementById('leaderboardBody');
@@ -117,7 +129,7 @@
         function triggerDeath() {
             gameRunning = false;
             flashOpacity = 1.0; shake = 30;
-            failSound.play().catch(()=>{});
+            if(!isMuted) failSound.play().catch(()=>{});
             for(let i=0; i<100; i++) {
                 particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*40, vy: (Math.random()-0.5)*40, life: 60, size: Math.random()*10, color: i%3==0?'#f40':(i%3==1?'#fc0':'#fff') });
             }
@@ -135,7 +147,6 @@
             
             totalFrames++;
 
-            // Ammo refill: Exactly 6 seconds (60fps * 6 = 360)
             if (totalFrames % 360 === 0) { 
                 ammo++; 
                 document.getElementById('ammo').innerText = ammo; 
@@ -147,11 +158,17 @@
                 player.walkCycle += 0.35;
             }
 
-            // Bomb Spawn Distribution Fix
+            // Bomb Spawn Logic: Pushed more to sides
             if (totalFrames % 16 === 0) {
                 const bombSize = 40;
-                // random position across the whole width including edges
-                const randomX = Math.random() * (canvas.width - bombSize);
+                // Bias the random to hit the edges more often
+                let randomX;
+                if(Math.random() < 0.4) {
+                    // 40% chance to spawn specifically in the side 15% of the screen
+                    randomX = Math.random() < 0.5 ? Math.random() * (canvas.width * 0.15) : canvas.width - (Math.random() * (canvas.width * 0.15)) - bombSize;
+                } else {
+                    randomX = Math.random() * (canvas.width - bombSize);
+                }
                 bombs.push({ x: randomX, y: -60 });
             }
 
@@ -162,7 +179,7 @@
             });
 
             baklavas.forEach((b, bi) => {
-                b.y -= 22;
+                b.y -= 12; // SLOWER BAKLAVA (was 22)
                 bombs.forEach((bomb, mi) => {
                     if (Math.abs(b.x - (bomb.x + 20)) < 40 && Math.abs(b.y - (bomb.y + 20)) < 40) { 
                         bombs.splice(mi, 1); 
@@ -210,4 +227,4 @@
         }
     </script>
 </body>
-</html>
+</html> 
