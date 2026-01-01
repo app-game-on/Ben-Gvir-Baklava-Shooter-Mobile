@@ -190,7 +190,6 @@
                 player.walkCycle += 0.35;
             }
 
-            // --- 500 POINT MULTIPLIER LOGIC ---
             let diffMult = Math.pow(1.25, Math.floor(score / 500));
             let spawnRate = Math.max(5, Math.floor(18 / diffMult));
 
@@ -240,7 +239,14 @@
                 ctx.stroke();
             }
             bombs.forEach(b => {
+                // Bomb body
                 ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x+20, b.y+20, 20, 0, Math.PI*2); ctx.fill();
+                // Fuse
+                ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3; ctx.beginPath();
+                ctx.moveTo(b.x+20, b.y+2); ctx.quadraticCurveTo(b.x+25, b.y-10, b.x+32, b.y-8); ctx.stroke();
+                // Spark
+                ctx.fillStyle = (totalFrames % 6 < 3) ? '#FFD700' : '#FF4500';
+                ctx.beginPath(); ctx.arc(b.x+32, b.y-8, 4, 0, Math.PI*2); ctx.fill();
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
             particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
