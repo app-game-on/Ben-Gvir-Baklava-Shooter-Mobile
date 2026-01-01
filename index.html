@@ -8,6 +8,8 @@
     <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge bombs, and compete for the top score on the global leaderboard!">
     <meta name="keywords" content="Ben Gvir Shooter, Baklava Game, Online Arcade, Leaderboard Game, bengvirshooter">
     
+    <link rel="icon" type="image/png" href="baklava.png">
+
     <meta property="og:title" content="Ben Gvir Shooter">
     <meta property="og:description" content="Can you get the high score? Play the Baklava Shooter now!">
     <meta property="og:url" content="https://bengvirshooter.com">
@@ -36,8 +38,8 @@
 <body>
 
     <div class="topBtns">
-        <div id="muteBtn" class="controlBtn">🔊</div>
-        <div id="pauseBtn" class="controlBtn">⏸</div>
+        <div id="muteBtn" class="controlBtn" title="Mute">🔊</div>
+        <div id="pauseBtn" class="controlBtn" title="Pause">⏸</div>
     </div>
 
     <div id="loginScreen">
@@ -188,7 +190,6 @@
                 player.walkCycle += 0.35;
             }
 
-            // DYNAMIC DIFFICULTY
             let bombSpeed = 5.5 + (score / 2000);
             let spawnRate = Math.max(7, 16 - Math.floor(score / 1500));
 
@@ -228,7 +229,6 @@
             ctx.save();
             if (shake > 1) ctx.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2);
             
-            // Background TENSION (Turns redder as score goes up)
             let redIntensity = Math.min(120, score / 100);
             ctx.fillStyle = `rgb(${61 + redIntensity}, 51, 41)`; 
             ctx.fillRect(0, 0, canvas.width, canvas.height);
