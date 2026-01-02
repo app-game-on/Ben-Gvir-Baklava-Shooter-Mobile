@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <title>Ben Gvir Shooter - Baklava Arcade Game</title>
-    <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge bombs, and compete for the top score!">
+    <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge hazards, and compete for the top score!">
     <link rel="icon" type="image/png" href="baklava.png">
 
     <style>
@@ -20,7 +20,6 @@
         .controlBtn { width: 45px; height: 45px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; cursor: pointer; }
         #fireBtn { position: absolute; bottom: 40px; left: 25px; width: 95px; height: 95px; border-radius: 50%; background: rgba(255, 68, 68, 0.7); border: 3px solid white; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; z-index: 15; font-size: 20px; }
         #gameOver, #pauseOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #fff; display: none; z-index: 60; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px; border: 4px solid #ff4444; width: 90%; max-width: 400px; }
-        #pauseOverlay { border-color: #ffcc00; }
         .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
         .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
         .gold { color: #ffcc00; font-weight: bold; }
@@ -72,8 +71,10 @@
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3JYh1ebRrvFZP0zNVLRcjtfv7wi7dZxMCb0uNOvtj7cSyE8FQVz9Dp_KOzFfg4H45/exec";
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        
         const headImg = new Image(); headImg.src = 'photo1.png';
         const baklavaImg = new Image(); baklavaImg.src = 'baklava.png';
+        const arabImg = new Image(); arabImg.src = 'arab.png';
         const failSound = new Audio('fail_sound.mp3');
 
         let isMuted = false, isPaused = false;
@@ -128,6 +129,19 @@
             } catch (err) { body.innerHTML = "<tr><td>Error syncing.</td></tr>"; }
         }
 
+        function createExplosion(x, y, count = 15, color = '#f40') {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random()-0.5)*15,
+                    vy: (Math.random()-0.5)*15,
+                    life: 30,
+                    size: Math.random()*5 + 2,
+                    color: i%2===0 ? color : '#fc0'
+                });
+            }
+        }
+
         function runGame() {
             if (loopId) cancelAnimationFrame(loopId);
             gameRunning = true; isPaused = false;
@@ -164,9 +178,7 @@
         function triggerDeath() {
             gameRunning = false; flashOpacity = 1.0; shake = 30;
             if(!isMuted) failSound.play().catch(()=>{});
-            for(let i=0; i<100; i++) {
-                particles.push({ x: player.x, y: player.y, vx: (Math.random()-0.5)*40, vy: (Math.random()-0.5)*40, life: 60, size: Math.random()*10, color: i%3==0?'#f40':(i%3==1?'#fc0':'#fff') });
-            }
+            createExplosion(player.x, player.y, 80);
             document.getElementById('finalScore').innerText = "SCORE: " + score;
             document.getElementById('gameOver').style.display = 'block';
             syncGlobalScores(username, score);
@@ -194,7 +206,11 @@
             let spawnRate = Math.max(5, Math.floor(18 / diffMult));
 
             if (totalFrames % spawnRate === 0) {
-                bombs.push({ x: Math.random() * (canvas.width - 40), y: -60 });
+                bombs.push({ 
+                    x: Math.random() * (canvas.width - 40), 
+                    y: -60, 
+                    type: Math.random() > 0.5 ? 'bomb' : 'doc' 
+                });
             }
 
             bombs.forEach((b, i) => {
@@ -207,8 +223,9 @@
                 b.y -= 12;
                 bombs.forEach((bomb, mi) => {
                     if (Math.abs(b.x - (bomb.x + 20)) < 40 && Math.abs(b.y - (bomb.y + 20)) < 40) { 
+                        createExplosion(bomb.x + 20, bomb.y + 20, 15);
                         bombs.splice(mi, 1); baklavas.splice(bi, 1); 
-                        combo++; comboTimer = 180; shake = 12; score += (100 * combo);
+                        combo++; comboTimer = 180; shake = 8; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
                         document.getElementById('comboText').style.display = 'block';
                     }
@@ -239,17 +256,14 @@
                 ctx.stroke();
             }
             bombs.forEach(b => {
-                // Bomb body
-                ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x+20, b.y+20, 20, 0, Math.PI*2); ctx.fill();
-                // Fuse
-                ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 3; ctx.beginPath();
-                ctx.moveTo(b.x+20, b.y+2); ctx.quadraticCurveTo(b.x+25, b.y-10, b.x+32, b.y-8); ctx.stroke();
-                // Spark
-                ctx.fillStyle = (totalFrames % 6 < 3) ? '#FFD700' : '#FF4500';
-                ctx.beginPath(); ctx.arc(b.x+32, b.y-8, 4, 0, Math.PI*2); ctx.fill();
+                if(b.type === 'bomb') {
+                    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x+20, b.y+20, 20, 0, Math.PI*2); ctx.fill();
+                } else {
+                    ctx.drawImage(arabImg, b.x, b.y, 40, 45);
+                }
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
-            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 60; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
             ctx.restore();
             if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); }
         }
