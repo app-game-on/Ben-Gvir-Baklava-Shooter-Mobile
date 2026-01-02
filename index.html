@@ -74,6 +74,7 @@
         
         const headImg = new Image(); headImg.src = 'photo1.png';
         const baklavaImg = new Image(); baklavaImg.src = 'baklava.png';
+        const bombImg = new Image(); bombImg.src = 'bomb.png';
         const arabImg = new Image(); arabImg.src = 'arab.png';
         const failSound = new Audio('fail_sound.mp3');
 
@@ -81,7 +82,7 @@
         let username = "", gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
         let combo = 0, comboTimer = 0;
-        let bombs = [], baklavas = [], particles = [], moveTarget = null;
+        let hazards = [], baklavas = [], particles = [], moveTarget = null;
         const player = { x: 0, y: 0, walkCycle: 0 };
 
         function resize() {
@@ -147,7 +148,7 @@
             gameRunning = true; isPaused = false;
             score = 0; ammo = 3; totalFrames = 0; flashOpacity = 0; shake = 0;
             combo = 0; comboTimer = 0;
-            bombs = []; baklavas = []; particles = [];
+            hazards = []; baklavas = []; particles = [];
             document.getElementById('score').innerText = "0";
             document.getElementById('ammo').innerText = "3";
             document.getElementById('comboText').style.display = 'none';
@@ -206,25 +207,25 @@
             let spawnRate = Math.max(5, Math.floor(18 / diffMult));
 
             if (totalFrames % spawnRate === 0) {
-                bombs.push({ 
+                hazards.push({ 
                     x: Math.random() * (canvas.width - 40), 
                     y: -60, 
                     type: Math.random() > 0.5 ? 'bomb' : 'doc' 
                 });
             }
 
-            bombs.forEach((b, i) => {
-                b.y += 5.5 + (score / 2000);
-                if (Math.abs(b.x + 20 - player.x) < 35 && Math.abs(b.y + 20 - player.y) < 65) triggerDeath();
-                if (b.y > canvas.height) { bombs.splice(i, 1); score += 10; }
+            hazards.forEach((h, i) => {
+                h.y += 5.5 + (score / 2000);
+                if (Math.abs(h.x + 20 - player.x) < 35 && Math.abs(h.y + 20 - player.y) < 65) triggerDeath();
+                if (h.y > canvas.height) { hazards.splice(i, 1); score += 10; }
             });
 
             baklavas.forEach((b, bi) => {
                 b.y -= 12;
-                bombs.forEach((bomb, mi) => {
-                    if (Math.abs(b.x - (bomb.x + 20)) < 40 && Math.abs(b.y - (bomb.y + 20)) < 40) { 
-                        createExplosion(bomb.x + 20, bomb.y + 20, 15);
-                        bombs.splice(mi, 1); baklavas.splice(bi, 1); 
+                hazards.forEach((h, mi) => {
+                    if (Math.abs(b.x - (h.x + 20)) < 40 && Math.abs(b.y - (h.y + 20)) < 40) { 
+                        createExplosion(h.x + 20, h.y + 20, 15);
+                        hazards.splice(mi, 1); baklavas.splice(bi, 1); 
                         combo++; comboTimer = 180; shake = 8; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
                         document.getElementById('comboText').style.display = 'block';
@@ -255,11 +256,11 @@
                 ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x + 15, player.y + 90 - sw);
                 ctx.stroke();
             }
-            bombs.forEach(b => {
-                if(b.type === 'bomb') {
-                    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(b.x+20, b.y+20, 20, 0, Math.PI*2); ctx.fill();
+            hazards.forEach(h => {
+                if(h.type === 'bomb') {
+                    ctx.drawImage(bombImg, h.x, h.y, 40, 40);
                 } else {
-                    ctx.drawImage(arabImg, b.x, b.y, 40, 45);
+                    ctx.drawImage(arabImg, h.x, h.y, 40, 45);
                 }
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
