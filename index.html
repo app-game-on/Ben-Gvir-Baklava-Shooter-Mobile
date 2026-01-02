@@ -204,29 +204,31 @@
             }
 
             let diffMult = Math.pow(1.25, Math.floor(score / 500));
-            let spawnRate = Math.max(5, Math.floor(18 / diffMult));
+            let spawnRate = Math.max(8, Math.floor(25 / diffMult)); // Adjusted for larger size
 
             if (totalFrames % spawnRate === 0) {
                 hazards.push({ 
-                    x: Math.random() * (canvas.width - 40), 
-                    y: -60, 
+                    x: Math.random() * (canvas.width - 120), 
+                    y: -150, 
                     type: Math.random() > 0.5 ? 'bomb' : 'doc' 
                 });
             }
 
             hazards.forEach((h, i) => {
-                h.y += 5.5 + (score / 2000);
-                if (Math.abs(h.x + 20 - player.x) < 35 && Math.abs(h.y + 20 - player.y) < 65) triggerDeath();
+                h.y += 5.0 + (score / 2500);
+                // Hitbox collision check (Adjusted for 120px size)
+                if (Math.abs(h.x + 60 - player.x) < 70 && Math.abs(h.y + 60 - player.y) < 85) triggerDeath();
                 if (h.y > canvas.height) { hazards.splice(i, 1); score += 10; }
             });
 
             baklavas.forEach((b, bi) => {
                 b.y -= 12;
                 hazards.forEach((h, mi) => {
-                    if (Math.abs(b.x - (h.x + 20)) < 40 && Math.abs(b.y - (h.y + 20)) < 40) { 
-                        createExplosion(h.x + 20, h.y + 20, 15);
+                    // Impact collision check (Adjusted for 120px size)
+                    if (Math.abs(b.x - (h.x + 60)) < 65 && Math.abs(b.y - (h.y + 60)) < 65) { 
+                        createExplosion(h.x + 60, h.y + 60, 25);
                         hazards.splice(mi, 1); baklavas.splice(bi, 1); 
-                        combo++; comboTimer = 180; shake = 8; score += (100 * combo);
+                        combo++; comboTimer = 180; shake = 12; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
                         document.getElementById('comboText').style.display = 'block';
                     }
@@ -258,9 +260,9 @@
             }
             hazards.forEach(h => {
                 if(h.type === 'bomb') {
-                    ctx.drawImage(bombImg, h.x, h.y, 40, 40);
+                    ctx.drawImage(bombImg, h.x, h.y, 120, 120); // 200% larger
                 } else {
-                    ctx.drawImage(arabImg, h.x, h.y, 40, 45);
+                    ctx.drawImage(arabImg, h.x, h.y, 120, 135); // 200% larger
                 }
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
