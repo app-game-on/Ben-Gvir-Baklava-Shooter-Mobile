@@ -84,6 +84,7 @@
         let combo = 0, comboTimer = 0;
         let hazards = [], baklavas = [], particles = [], moveTarget = null;
         const player = { x: 0, y: 0, walkCycle: 0 };
+        const HAZARD_SIZE = 90; // Decreased by 25% from 120px
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -204,31 +205,31 @@
             }
 
             let diffMult = Math.pow(1.25, Math.floor(score / 500));
-            let spawnRate = Math.max(8, Math.floor(25 / diffMult)); // Adjusted for larger size
+            let spawnRate = Math.max(7, Math.floor(22 / diffMult));
 
             if (totalFrames % spawnRate === 0) {
                 hazards.push({ 
-                    x: Math.random() * (canvas.width - 120), 
+                    x: Math.random() * (canvas.width - HAZARD_SIZE), 
                     y: -150, 
                     type: Math.random() > 0.5 ? 'bomb' : 'doc' 
                 });
             }
 
             hazards.forEach((h, i) => {
-                h.y += 5.0 + (score / 2500);
-                // Hitbox collision check (Adjusted for 120px size)
-                if (Math.abs(h.x + 60 - player.x) < 70 && Math.abs(h.y + 60 - player.y) < 85) triggerDeath();
+                h.y += 5.2 + (score / 2500);
+                // Unified Collision Check for 90px
+                if (Math.abs(h.x + HAZARD_SIZE/2 - player.x) < 55 && Math.abs(h.y + HAZARD_SIZE/2 - player.y) < 70) triggerDeath();
                 if (h.y > canvas.height) { hazards.splice(i, 1); score += 10; }
             });
 
             baklavas.forEach((b, bi) => {
                 b.y -= 12;
                 hazards.forEach((h, mi) => {
-                    // Impact collision check (Adjusted for 120px size)
-                    if (Math.abs(b.x - (h.x + 60)) < 65 && Math.abs(b.y - (h.y + 60)) < 65) { 
-                        createExplosion(h.x + 60, h.y + 60, 25);
+                    // Impact Check for 90px
+                    if (Math.abs(b.x - (h.x + HAZARD_SIZE/2)) < 50 && Math.abs(b.y - (h.y + HAZARD_SIZE/2)) < 50) { 
+                        createExplosion(h.x + HAZARD_SIZE/2, h.y + HAZARD_SIZE/2, 20);
                         hazards.splice(mi, 1); baklavas.splice(bi, 1); 
-                        combo++; comboTimer = 180; shake = 12; score += (100 * combo);
+                        combo++; comboTimer = 180; shake = 10; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
                         document.getElementById('comboText').style.display = 'block';
                     }
@@ -260,9 +261,9 @@
             }
             hazards.forEach(h => {
                 if(h.type === 'bomb') {
-                    ctx.drawImage(bombImg, h.x, h.y, 120, 120); // 200% larger
+                    ctx.drawImage(bombImg, h.x, h.y, HAZARD_SIZE, HAZARD_SIZE);
                 } else {
-                    ctx.drawImage(arabImg, h.x, h.y, 120, 135); // 200% larger
+                    ctx.drawImage(arabImg, h.x, h.y, HAZARD_SIZE, HAZARD_SIZE);
                 }
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
