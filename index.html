@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <title>Ben Gvir Shooter - Baklava Arcade Game</title>
-    <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge hazards, and compete for the top score!">
+    <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge bombs, and compete for the top score!">
     <link rel="icon" type="image/png" href="baklava.png">
 
     <style>
@@ -75,16 +75,15 @@
         const headImg = new Image(); headImg.src = 'photo1.png';
         const baklavaImg = new Image(); baklavaImg.src = 'baklava.png';
         const bombImg = new Image(); bombImg.src = 'bomb.png';
-        const arabImg = new Image(); arabImg.src = 'arab.png';
         const failSound = new Audio('fail_sound.mp3');
 
         let isMuted = false, isPaused = false;
         let username = "", gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
         let combo = 0, comboTimer = 0;
-        let hazards = [], baklavas = [], particles = [], moveTarget = null;
+        let bombs = [], baklavas = [], particles = [], moveTarget = null;
         const player = { x: 0, y: 0, walkCycle: 0 };
-        const HAZARD_SIZE = 90; // Decreased by 25% from 120px
+        const BOMB_SIZE = 90;
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -149,7 +148,7 @@
             gameRunning = true; isPaused = false;
             score = 0; ammo = 3; totalFrames = 0; flashOpacity = 0; shake = 0;
             combo = 0; comboTimer = 0;
-            hazards = []; baklavas = []; particles = [];
+            bombs = []; baklavas = []; particles = [];
             document.getElementById('score').innerText = "0";
             document.getElementById('ammo').innerText = "3";
             document.getElementById('comboText').style.display = 'none';
@@ -208,33 +207,32 @@
             let spawnRate = Math.max(7, Math.floor(22 / diffMult));
 
             if (totalFrames % spawnRate === 0) {
-                hazards.push({ 
-                    x: Math.random() * (canvas.width - HAZARD_SIZE), 
-                    y: -150, 
-                    type: Math.random() > 0.5 ? 'bomb' : 'doc' 
+                bombs.push({ 
+                    x: Math.random() * (canvas.width - BOMB_SIZE), 
+                    y: -150
                 });
             }
 
-            hazards.forEach((h, i) => {
-                h.y += 5.2 + (score / 2500);
-                // Unified Collision Check for 90px
-                if (Math.abs(h.x + HAZARD_SIZE/2 - player.x) < 55 && Math.abs(h.y + HAZARD_SIZE/2 - player.y) < 70) triggerDeath();
-                if (h.y > canvas.height) { hazards.splice(i, 1); score += 10; }
+            bombs.forEach((b, i) => {
+                b.y += 5.2 + (score / 2500);
+                // Accurate collision check (scaled to 90px)
+                if (Math.abs(b.x + BOMB_SIZE/2 - player.x) < 45 && Math.abs(b.y + BOMB_SIZE/2 - player.y) < 65) triggerDeath();
+                if (b.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
 
-            baklavas.forEach((b, bi) => {
-                b.y -= 12;
-                hazards.forEach((h, mi) => {
-                    // Impact Check for 90px
-                    if (Math.abs(b.x - (h.x + HAZARD_SIZE/2)) < 50 && Math.abs(b.y - (h.y + HAZARD_SIZE/2)) < 50) { 
-                        createExplosion(h.x + HAZARD_SIZE/2, h.y + HAZARD_SIZE/2, 20);
-                        hazards.splice(mi, 1); baklavas.splice(bi, 1); 
+            baklavas.forEach((bak, bi) => {
+                bak.y -= 12;
+                bombs.forEach((b, mi) => {
+                    // Impact check (scaled to 90px)
+                    if (Math.abs(bak.x - (b.x + BOMB_SIZE/2)) < 45 && Math.abs(bak.y - (b.y + BOMB_SIZE/2)) < 45) { 
+                        createExplosion(b.x + BOMB_SIZE/2, b.y + BOMB_SIZE/2, 20);
+                        bombs.splice(mi, 1); baklavas.splice(bi, 1); 
                         combo++; comboTimer = 180; shake = 10; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
                         document.getElementById('comboText').style.display = 'block';
                     }
                 });
-                if (b.y < -20) { baklavas.splice(bi, 1); combo = 0; }
+                if (bak.y < -20) { baklavas.splice(bi, 1); combo = 0; }
             });
             document.getElementById('score').innerText = score;
         }
@@ -259,12 +257,8 @@
                 ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x + 15, player.y + 90 - sw);
                 ctx.stroke();
             }
-            hazards.forEach(h => {
-                if(h.type === 'bomb') {
-                    ctx.drawImage(bombImg, h.x, h.y, HAZARD_SIZE, HAZARD_SIZE);
-                } else {
-                    ctx.drawImage(arabImg, h.x, h.y, HAZARD_SIZE, HAZARD_SIZE);
-                }
+            bombs.forEach(b => {
+                ctx.drawImage(bombImg, b.x, b.y, BOMB_SIZE, BOMB_SIZE);
             });
             baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
             particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
