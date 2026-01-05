@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <title>Ben Gvir Shooter - Arcade Edition</title>
+    <title>Arcade Shooter - Global Leaderboard</title>
     <link rel="icon" type="image/png" href="baklava.png">
 
     <style>
@@ -20,6 +20,9 @@
         .controlBtn { width: 45px; height: 45px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; cursor: pointer; }
         #fireBtn { position: absolute; bottom: 40px; left: 25px; width: 95px; height: 95px; border-radius: 50%; background: rgba(255, 68, 68, 0.7); border: 3px solid white; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; z-index: 15; font-size: 20px; }
         #gameOver, #pauseOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #fff; display: none; z-index: 60; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px; border: 4px solid #ff4444; width: 90%; max-width: 400px; }
+        .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
+        .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
+        .gold { color: #ffcc00; font-weight: bold; }
         .actionBtn { margin: 5px; padding: 12px 25px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; display: inline-block; }
         #retryBtn { background: #ff4444; color: #fff; }
         #resumeBtn { background: #ffcc00; color: #000; }
@@ -54,16 +57,18 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore" style="font-size: 22px; margin: 10px 0;"></div>
+        <h3 style="color:#ffcc00;">GLOBAL TOP 5</h3>
+        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Connecting...</td></tr></tbody></table>
         <button id="retryBtn" class="actionBtn">RETRY</button>
     </div>
     
     <canvas id="gameCanvas"></canvas>
     
     <script>
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3JYh1ebRrvFZP0zNVLRcjtfv7wi7dZxMCb0uNOvtj7cSyE8FQVz9Dp_KOzFfg4H45/exec";
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        // Asset definitions
         const assets = {
             lvl1: { head: new Image(), ammo: new Image(), bomb: new Image() },
             lvl2: { head: new Image(), ammo: new Image(), bomb: new Image() }
@@ -76,14 +81,11 @@
         assets.lvl2.ammo.src = 'baklava.png';
         assets.lvl2.bomb.src = 'bomb.png';
 
-        const failSound = new Audio('fail_sound.mp3');
-
-        let isMuted = false, isPaused = false, gameRunning = false, loopId = null;
+        let username = "", isMuted = false, isPaused = false, gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
         let combo = 0, comboTimer = 0;
         let bombs = [], projectiles = [], particles = [], moveTarget = null;
         const player = { x: 0, y: 0, walkCycle: 0 };
-        const BOMB_SIZE = 90;
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -93,6 +95,18 @@
         window.addEventListener('resize', resize);
         resize();
 
+        async function syncGlobalScores(name, finalScore) {
+            const body = document.getElementById('leaderboardBody');
+            try {
+                const response = await fetch(`${SCRIPT_URL}?name=${encodeURIComponent(name)}&score=${finalScore}`);
+                const data = await response.json();
+                body.innerHTML = "";
+                data.forEach((entry, i) => {
+                    body.innerHTML += `<tr class="${i === 0 ? 'gold' : ''}"><td>#${i+1}</td><td>${entry[0]}</td><td>${entry[1]}</td></tr>`;
+                });
+            } catch (err) { body.innerHTML = "<tr><td>Error syncing leaderboard.</td></tr>"; }
+        }
+
         function togglePause() {
             if (!gameRunning) return;
             isPaused = !isPaused;
@@ -101,15 +115,12 @@
         document.getElementById('pauseBtn').onclick = togglePause;
         document.getElementById('resumeBtn').onclick = togglePause;
 
-        function createExplosion(x, y, count = 15) {
-            for(let i=0; i<count; i++) {
+        function createExplosion(x, y) {
+            for(let i=0; i<20; i++) {
                 particles.push({
                     x: x, y: y,
-                    vx: (Math.random()-0.5)*15,
-                    vy: (Math.random()-0.5)*15,
-                    life: 30,
-                    size: Math.random()*5 + 2,
-                    color: i%2===0 ? '#f40' : '#fc0'
+                    vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15,
+                    life: 30, size: Math.random()*5 + 2, color: i%2===0 ? '#f40' : '#fc0'
                 });
             }
         }
@@ -124,7 +135,10 @@
             gameLoop();
         }
 
-        document.getElementById('startBtn').onclick = runGame;
+        document.getElementById('startBtn').onclick = () => {
+            username = document.getElementById('usernameInput').value.trim().toUpperCase() || "PLAYER";
+            runGame();
+        };
         document.getElementById('retryBtn').onclick = runGame;
 
         canvas.addEventListener('touchstart', (e) => { if(!isPaused) moveTarget = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
@@ -156,21 +170,22 @@
                 player.walkCycle += 0.35;
             }
 
-            // Difficulty & Spawning
             let diffMult = Math.pow(1.25, Math.floor(score / 500));
             let spawnRate = Math.max(7, Math.floor(22 / diffMult));
 
             if (totalFrames % spawnRate === 0) {
-                bombs.push({ x: Math.random() * (canvas.width - BOMB_SIZE), y: -150 });
+                bombs.push({ x: Math.random() * (canvas.width - 90), y: -150 });
             }
 
             bombs.forEach((b, i) => {
                 b.y += 5.2 + (score / 2500);
-                if (Math.abs(b.x + BOMB_SIZE/2 - player.x) < 45 && Math.abs(b.y + BOMB_SIZE/2 - player.y) < 65) {
+                const bSize = score < 2500 ? 72 : 90; // Level 1 (FirstOrder) is 20% smaller than 90
+                if (Math.abs(b.x + bSize/2 - player.x) < 45 && Math.abs(b.y + bSize/2 - player.y) < 65) {
                     gameRunning = false; flashOpacity = 1.0; shake = 30;
-                    createExplosion(player.x, player.y, 80);
+                    createExplosion(player.x, player.y);
                     document.getElementById('finalScore').innerText = "SCORE: " + score;
                     document.getElementById('gameOver').style.display = 'block';
+                    syncGlobalScores(username, score);
                 }
                 if (b.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
@@ -178,8 +193,9 @@
             projectiles.forEach((proj, bi) => {
                 proj.y -= 12;
                 bombs.forEach((b, mi) => {
-                    if (Math.abs(proj.x - (b.x + BOMB_SIZE/2)) < 45 && Math.abs(proj.y - (b.y + BOMB_SIZE/2)) < 45) { 
-                        createExplosion(b.x + BOMB_SIZE/2, b.y + BOMB_SIZE/2, 20);
+                    const bSize = score < 2500 ? 72 : 90;
+                    if (Math.abs(proj.x - (b.x + bSize/2)) < 45 && Math.abs(proj.y - (b.y + bSize/2)) < 45) { 
+                        createExplosion(b.x + bSize/2, b.y + bSize/2);
                         bombs.splice(mi, 1); projectiles.splice(bi, 1); 
                         combo++; comboTimer = 180; shake = 10; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
@@ -198,20 +214,34 @@
             ctx.fillStyle = score < 2500 ? '#1a1410' : '#2a1a10';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            const currentAssets = score < 2500 ? assets.lvl1 : assets.lvl2;
+            const isLvl1 = score < 2500;
+            const currentAssets = isLvl1 ? assets.lvl1 : assets.lvl2;
 
             if (gameRunning || isPaused) {
-                ctx.drawImage(currentAssets.head, player.x - 25, player.y - 25, 50, 50);
+                // Character Body
                 const sw = Math.sin(player.walkCycle) * 18;
                 ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 5; ctx.lineCap = 'round';
                 ctx.beginPath();
-                ctx.moveTo(player.x, player.y + 25); ctx.lineTo(player.x, player.y + 60);
-                ctx.moveTo(player.x, player.y + 40); ctx.lineTo(player.x - 25, player.y + 50 + sw);
-                ctx.moveTo(player.x, player.y + 40); ctx.lineTo(player.x + 25, player.y + 50 - sw);
+                ctx.moveTo(player.x, player.y + 10); ctx.lineTo(player.x, player.y + 60); // Torso
+                ctx.moveTo(player.x, player.y + 30); ctx.lineTo(player.x - 25, player.y + 40 + sw); // Arm L
+                ctx.moveTo(player.x, player.y + 30); ctx.lineTo(player.x + 25, player.y + 40 - sw); // Arm R
+                ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x - 15, player.y + 90 + sw); // Leg L
+                ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x + 15, player.y + 90 - sw); // Leg R
                 ctx.stroke();
+                // Connected Head
+                ctx.drawImage(currentAssets.head, player.x - 35, player.y - 45, 70, 70);
             }
-            bombs.forEach(b => ctx.drawImage(currentAssets.bomb, b.x, b.y, BOMB_SIZE, BOMB_SIZE));
-            projectiles.forEach(p => ctx.drawImage(currentAssets.ammo, p.x - 22, p.y - 22, 45, 45));
+            
+            bombs.forEach(b => {
+                const bSize = isLvl1 ? 72 : 90;
+                ctx.drawImage(currentAssets.bomb, b.x, b.y, bSize, bSize);
+            });
+            
+            projectiles.forEach(p => {
+                const aSize = isLvl1 ? 54 : 45; // Bible (Lvl1) is ~20% bigger than Baklava (45)
+                ctx.drawImage(currentAssets.ammo, p.x - aSize/2, p.y - aSize/2, aSize, aSize);
+            });
+            
             particles.forEach(p => { 
                 ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; 
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); 
