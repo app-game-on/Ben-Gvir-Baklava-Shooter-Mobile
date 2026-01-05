@@ -1,255 +1,195 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Game variables
+    let player = { x: 375, y: 500, width: 50, height: 50, speed: 0, dx: 0 };
+    let hazards = [];
+    let bullets = [];
+    let score = 0;
+    let gameOver = false;
+    let spawnRate = 1000; // Starting spawn rate
+    let lastSpawn = 0;
+    let isSecondPhase = false; // Tracks if we are in Phase 2
     
-    <title>Arcade Shooter - Global Leaderboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
-        body { overflow: hidden; font-family: sans-serif; background: #1a1410; position: fixed; width: 100%; height: 100%; }
-        #gameCanvas { display: block; }
-        #loginScreen { position: absolute; inset: 0; background: #1a1410; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; }
-        #loginScreen input { padding: 15px; font-size: 18px; border-radius: 8px; margin: 20px 0; width: 80%; max-width: 300px; text-align: center; border: none; }
-        #loginScreen button { padding: 15px 40px; font-size: 20px; background: #ffcc00; border: none; border-radius: 8px; font-weight: bold; color: #000; }
-        #ui { position: absolute; top: 10px; right: 10px; text-align: right; color: #fff; font-weight: bold; z-index: 10; pointer-events: none; text-shadow: 2px 2px 2px #000; }
-        #levelText { color: #00ffcc; font-size: 14px; }
-        .topBtns { position: absolute; top: 15px; left: 15px; display: flex; gap: 10px; z-index: 50; }
-        .controlBtn { width: 45px; height: 45px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; cursor: pointer; }
-        #fireBtn { position: absolute; bottom: 40px; left: 25px; width: 95px; height: 95px; border-radius: 50%; background: rgba(255, 68, 68, 0.7); border: 3px solid white; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; z-index: 15; font-size: 20px; }
-        #gameOver, #pauseOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #fff; display: none; z-index: 60; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px; border: 4px solid #ff4444; width: 90%; max-width: 400px; }
-        .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
-        .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
-        .gold { color: #ffcc00; font-weight: bold; }
-        .actionBtn { margin: 5px; padding: 12px 25px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; display: inline-block; }
-        #retryBtn { background: #ff4444; color: #fff; }
-    </style>
-</head>
-<body>
+    // --- NEW: Immunity Variables ---
+    let isImmune = false;
+    let immunityTimer = 0;
+    // -------------------------------
 
-    <div class="topBtns">
-        <div id="muteBtn" class="controlBtn">🔊</div>
-        <div id="pauseBtn" class="controlBtn">⏸</div>
-    </div>
+    // Images
+    const playerImg = new Image();
+    playerImg.src = 'GoldK.png'; 
+    const hazardImg1 = new Image();
+    hazardImg1.src = 'FirstOrder.png'; // Phase 1 hazard
+    const hazardImg2 = new Image();
+    hazardImg2.src = 'bomb.png';       // Phase 2 hazard
+    const bulletImg = new Image();
+    bulletImg.src = 'Bible.png';       // Phase 1 bullet
+    const bulletImg2 = new Image();
+    bulletImg2.src = 'baklava.png';    // Phase 2 bullet
 
-    <div id="loginScreen">
-        <h1 style="color:#ffcc00;">ARCADE SHOOTER</h1>
-        <input type="text" id="usernameInput" placeholder="ENTER NAME..." maxlength="12">
-        <button id="startBtn">START GAME</button>
-    </div>
-
-    <div id="pauseOverlay">
-        <h1 style="color: #ffcc00;">PAUSED</h1>
-        <button id="resumeBtn" class="actionBtn" style="background:#ffcc00;">RESUME</button>
-    </div>
-
-    <div id="ui">
-        <span id="levelText">LEVEL 1</span><br>
-        SCORE: <span id="score">0</span><br>
-        <span id="comboText" style="color:#ffcc00; display:none;">COMBO: x<span id="comboVal">1</span></span><br>
-        <span style="color:#ffcc00">AMMO: <span id="ammo">3</span></span>
-    </div>
-    <div id="fireBtn">FIRE</div>
-
-    <div id="gameOver">
-        <h1 style="color: #ff4444;">WASTED</h1>
-        <div id="finalScore" style="font-size: 22px; margin: 10px 0;"></div>
-        <h3 style="color:#ffcc00;">GLOBAL TOP 5</h3>
-        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Connecting...</td></tr></tbody></table>
-        <button id="retryBtn" class="actionBtn">RETRY</button>
-    </div>
+    // Touch controls
+    let touchStartX = 0;
     
-    <canvas id="gameCanvas"></canvas>
-    
-    <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3JYh1ebRrvFZP0zNVLRcjtfv7wi7dZxMCb0uNOvtj7cSyE8FQVz9Dp_KOzFfg4H45/exec";
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+    canvas.addEventListener("touchstart", (e) => {
+        touchStartX = e.touches[0].clientX;
+    });
+
+    canvas.addEventListener("touchmove", (e) => {
+        let touchX = e.touches[0].clientX;
+        let deltaX = touchX - touchStartX;
+        player.x += deltaX;
         
-        const assets = {
-            lvl1: { head: new Image(), ammo: new Image(), bomb: new Image() },
-            lvl2: { head: new Image(), ammo: new Image(), bomb: new Image() }
-        };
-        assets.lvl1.head.src = 'GoldK.png';
-        assets.lvl1.ammo.src = 'Bible.png';
-        assets.lvl1.bomb.src = 'FirstOrder.png';
+        // Keep player in bounds
+        if (player.x < 0) player.x = 0;
+        if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
         
-        assets.lvl2.head.src = 'photo1.png';
-        assets.lvl2.ammo.src = 'baklava.png';
-        assets.lvl2.bomb.src = 'bomb.png';
+        touchStartX = touchX;
+        e.preventDefault(); // Stop scrolling
+    }, { passive: false });
 
-        let username = "", isPaused = false, gameRunning = false, loopId = null;
-        let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
-        let combo = 0, comboTimer = 0;
-        let bombs = [], projectiles = [], particles = [], moveTarget = null;
-        const player = { x: 0, y: 0, walkCycle: 0 };
+    // Button Listeners
+    document.getElementById("fireBtn").addEventListener("click", shoot);
+    document.getElementById("fireBtn").addEventListener("touchstart", (e) => {
+        e.preventDefault(); 
+        shoot();
+    });
 
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            player.x = canvas.width / 2; player.y = canvas.height * 0.7;
+    function shoot() {
+        if (gameOver) return;
+        bullets.push({ 
+            x: player.x + player.width / 2 - 15, 
+            y: player.y, 
+            width: 30, 
+            height: 30,
+            img: isSecondPhase ? bulletImg2 : bulletImg 
+        });
+    }
+
+    function spawnHazard() {
+        // --- FIX: Edge Safety & Difficulty Cap ---
+        
+        // 1. Cap the difficulty: Don't let spawnRate go below 400ms
+        let currentRate = Math.max(400, 1000 - (score * 0.5)); 
+        
+        if (Date.now() - lastSpawn > currentRate) {
+            // 2. Fix Edges: Allow X to go from -20 to Width+20 so edges aren't safe
+            let minX = -20;
+            let maxX = canvas.width - 30; // 50 width - 20 overlap
+            let randomX = Math.random() * (maxX - minX) + minX;
+
+            hazards.push({
+                x: randomX,
+                y: -50,
+                width: 50,
+                height: 50,
+                speed: 3 + (score * 0.002), // Speed increases slowly
+                img: isSecondPhase ? hazardImg2 : hazardImg1
+            });
+            lastSpawn = Date.now();
         }
-        window.addEventListener('resize', resize);
-        resize();
+    }
 
-        async function syncGlobalScores(name, finalScore) {
-            const body = document.getElementById('leaderboardBody');
-            try {
-                const response = await fetch(`${SCRIPT_URL}?name=${encodeURIComponent(name)}&score=${finalScore}`);
-                const data = await response.json();
-                body.innerHTML = "";
-                data.forEach((entry, i) => {
-                    body.innerHTML += `<tr class="${i === 0 ? 'gold' : ''}"><td>#${i+1}</td><td>${entry[0]}</td><td>${entry[1]}</td></tr>`;
-                });
-            } catch (err) { body.innerHTML = "<tr><td>Error syncing leaderboard.</td></tr>"; }
+    function update() {
+        if (gameOver) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // --- NEW: Handle Phase Switch & Immunity ---
+        if (score >= 2500 && !isSecondPhase) {
+            isSecondPhase = true;
+            
+            // Swap Player Image
+            playerImg.src = 'photo1.png';
+            
+            // Trigger Immunity
+            isImmune = true;
+            setTimeout(() => {
+                isImmune = false;
+            }, 3000); // 3 Seconds of immunity
         }
 
-        function togglePause() {
-            if (!gameRunning) return;
-            isPaused = !isPaused;
-            document.getElementById('pauseOverlay').style.display = isPaused ? 'block' : 'none';
-        }
-        document.getElementById('pauseBtn').onclick = togglePause;
-        document.getElementById('resumeBtn').onclick = togglePause;
-
-        function createExplosion(x, y) {
-            for(let i=0; i<20; i++) {
-                particles.push({
-                    x: x, y: y,
-                    vx: (Math.random()-0.5)*15, vy: (Math.random()-0.5)*15,
-                    life: 30, size: Math.random()*5 + 2, color: i%2===0 ? '#f40' : '#fc0'
-                });
+        // Draw Player (Blink if immune)
+        if (isImmune) {
+            // Flicker effect: Only draw every other frame (or use modulo of time)
+            if (Math.floor(Date.now() / 100) % 2 === 0) {
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
             }
+        } else {
+            ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
         }
+        // -------------------------------------------
 
-        function runGame() {
-            if (loopId) cancelAnimationFrame(loopId);
-            gameRunning = true; isPaused = false;
-            score = 0; ammo = 3; totalFrames = 0;
-            bombs = []; projectiles = []; particles = [];
-            document.getElementById('gameOver').style.display = 'none';
-            document.getElementById('loginScreen').style.display = 'none';
-            gameLoop();
-        }
-
-        document.getElementById('startBtn').onclick = () => {
-            username = document.getElementById('usernameInput').value.trim().toUpperCase() || "PLAYER";
-            runGame();
-        };
-        document.getElementById('retryBtn').onclick = runGame;
-
-        canvas.addEventListener('touchstart', (e) => { if(!isPaused) moveTarget = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
-        canvas.addEventListener('touchmove', (e) => { if(!isPaused) { e.preventDefault(); moveTarget = { x: e.touches[0].clientX, y: e.touches[0].clientY }; } }, {passive: false});
-        canvas.addEventListener('touchend', () => { moveTarget = null; });
-
-        document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
-            e.stopPropagation();
-            if (gameRunning && !isPaused && ammo > 0) {
-                projectiles.push({ x: player.x, y: player.y - 10 });
-                ammo--; document.getElementById('ammo').innerText = ammo;
-            }
+        // Update Bullets
+        bullets.forEach((b, index) => {
+            b.y -= 7;
+            ctx.drawImage(b.img, b.x, b.y, b.width, b.height);
+            if (b.y < 0) bullets.splice(index, 1);
         });
 
-        function update() {
-            if (isPaused || !gameRunning) return;
-            if (shake > 0) shake *= 0.85;
-            if (flashOpacity > 0) flashOpacity -= 0.04;
-            if (comboTimer > 0) comboTimer--; else { combo = 0; document.getElementById('comboText').style.display = 'none'; }
+        // Update Hazards
+        spawnHazard();
+        hazards.forEach((h, hIndex) => {
+            h.y += h.speed;
+            ctx.drawImage(h.img, h.x, h.y, h.width, h.height);
 
-            particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
-            
-            totalFrames++;
-            if (totalFrames % 360 === 0) { ammo++; document.getElementById('ammo').innerText = ammo; }
-
-            if (moveTarget) {
-                player.x += (moveTarget.x - player.x) * 0.45;
-                player.y += (moveTarget.y - 20 - player.y) * 0.45;
-                player.walkCycle += 0.35;
-            }
-
-            let diffMult = Math.pow(1.25, Math.floor(score / 500));
-            let spawnRate = Math.max(7, Math.floor(22 / diffMult));
-
-            if (totalFrames % spawnRate === 0) {
-                bombs.push({ x: Math.random() * (canvas.width - 90), y: -150 });
-            }
-
-            bombs.forEach((b, i) => {
-                b.y += 5.2 + (score / 2500);
-                const bSize = score < 2500 ? 65 : 90; // Decreased Level 1 size
-                if (Math.abs(b.x + bSize/2 - player.x) < 40 && Math.abs(b.y + bSize/2 - player.y) < 55) {
-                    gameRunning = false; flashOpacity = 1.0; shake = 30;
-                    createExplosion(player.x, player.y);
-                    document.getElementById('finalScore').innerText = "SCORE: " + score;
-                    document.getElementById('gameOver').style.display = 'block';
-                    syncGlobalScores(username, score);
+            // Collision with Bullets
+            bullets.forEach((b, bIndex) => {
+                if (
+                    b.x < h.x + h.width &&
+                    b.x + b.width > h.x &&
+                    b.y < h.y + h.height &&
+                    b.y + b.height > h.y
+                ) {
+                    hazards.splice(hIndex, 1);
+                    bullets.splice(bIndex, 1);
+                    score += 50;
+                    document.getElementById("scoreBoard").innerText = "Score: " + score;
                 }
-                if (b.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
 
-            projectiles.forEach((proj, bi) => {
-                proj.y -= 12;
-                bombs.forEach((b, mi) => {
-                    const bSize = score < 2500 ? 65 : 90;
-                    if (Math.abs(proj.x - (b.x + bSize/2)) < 45 && Math.abs(proj.y - (b.y + bSize/2)) < 45) { 
-                        createExplosion(b.x + bSize/2, b.y + bSize/2);
-                        bombs.splice(mi, 1); projectiles.splice(bi, 1); 
-                        combo++; comboTimer = 180; shake = 10; score += (100 * combo);
-                        document.getElementById('comboVal').innerText = combo;
-                        document.getElementById('comboText').style.display = 'block';
-                    }
-                });
-                if (proj.y < -20) projectiles.splice(bi, 1);
-            });
-            document.getElementById('score').innerText = score;
-            document.getElementById('levelText').innerText = score < 2500 ? "LEVEL 1" : "LEVEL 2";
-        }
-
-        function draw() {
-            ctx.save();
-            if (shake > 1) ctx.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2);
-            ctx.fillStyle = score < 2500 ? '#1a1410' : '#2a1a10';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const isLvl1 = score < 2500;
-            const currentAssets = isLvl1 ? assets.lvl1 : assets.lvl2;
-
-            if (gameRunning || isPaused) {
-                const sw = Math.sin(player.walkCycle) * 18;
-                ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-                ctx.beginPath();
-                // Shorter Body Line
-                ctx.moveTo(player.x, player.y + 15); ctx.lineTo(player.x, player.y + 55); 
-                // Arms moved up
-                ctx.moveTo(player.x, player.y + 20); ctx.lineTo(player.x - 25, player.y + 35 + sw); 
-                ctx.moveTo(player.x, player.y + 20); ctx.lineTo(player.x + 25, player.y + 35 - sw); 
-                // Legs
-                ctx.moveTo(player.x, player.y + 55); ctx.lineTo(player.x - 15, player.y + 85 + sw); 
-                ctx.moveTo(player.x, player.y + 55); ctx.lineTo(player.x + 15, player.y + 85 - sw); 
-                ctx.stroke();
-                // Larger Head moved down (overlap body)
-                ctx.drawImage(currentAssets.head, player.x - 42, player.y - 35, 85, 85);
+            // Collision with Player
+            // --- NEW: Check Immunity before killing ---
+            if (!isImmune && 
+                player.x < h.x + h.width - 10 &&
+                player.x + player.width > h.x + 10 &&
+                player.y < h.y + h.height - 10 &&
+                player.y + player.height > h.y + 10
+            ) {
+                triggerGameOver();
             }
-            
-            bombs.forEach(b => {
-                const bSize = isLvl1 ? 65 : 90;
-                ctx.drawImage(currentAssets.bomb, b.x, b.y, bSize, bSize);
-            });
-            
-            projectiles.forEach(p => {
-                const aSize = isLvl1 ? 60 : 45; // Bible increased
-                ctx.drawImage(currentAssets.ammo, p.x - aSize/2, p.y - aSize/2, aSize, aSize);
-            });
-            
-            particles.forEach(p => { 
-                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; 
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); 
-            });
-            ctx.restore();
-            if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); }
-        }
 
-        function gameLoop() { update(); draw(); loopId = requestAnimationFrame(gameLoop); }
-    </script>
-</body>
-</html>
+            // Remove hazards off screen
+            if (h.y > canvas.height) hazards.splice(hIndex, 1);
+        });
+
+        requestAnimationFrame(update);
+    }
+
+    function triggerGameOver() {
+        gameOver = true;
+        document.getElementById("gameOver").style.display = "block";
+        document.getElementById("finalScore").innerText = score;
+        
+        // Show Ad Button
+        document.getElementById("reviveBtn").style.display = "inline-block";
+    }
+    
+    // Revive Logic (Call this when Ad is done)
+    function revivePlayer() {
+        gameOver = false;
+        document.getElementById("gameOver").style.display = "none";
+        hazards = []; // Clear screen
+        bullets = [];
+        
+        // Give immunity on revive too!
+        isImmune = true;
+        setTimeout(() => { isImmune = false; }, 3000);
+        
+        update();
+    }
+
+    // Start Loop
+    update();
+</script>
