@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
     <title>Arcade Shooter - Global Leaderboard</title>
-    <link rel="icon" type="image/png" href="baklava.png">
-
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
         body { overflow: hidden; font-family: sans-serif; background: #1a1410; position: fixed; width: 100%; height: 100%; }
@@ -25,7 +23,6 @@
         .gold { color: #ffcc00; font-weight: bold; }
         .actionBtn { margin: 5px; padding: 12px 25px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; display: inline-block; }
         #retryBtn { background: #ff4444; color: #fff; }
-        #resumeBtn { background: #ffcc00; color: #000; }
     </style>
 </head>
 <body>
@@ -43,7 +40,7 @@
 
     <div id="pauseOverlay">
         <h1 style="color: #ffcc00;">PAUSED</h1>
-        <button id="resumeBtn" class="actionBtn">RESUME</button>
+        <button id="resumeBtn" class="actionBtn" style="background:#ffcc00;">RESUME</button>
     </div>
 
     <div id="ui">
@@ -81,7 +78,7 @@
         assets.lvl2.ammo.src = 'baklava.png';
         assets.lvl2.bomb.src = 'bomb.png';
 
-        let username = "", isMuted = false, isPaused = false, gameRunning = false, loopId = null;
+        let username = "", isPaused = false, gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
         let combo = 0, comboTimer = 0;
         let bombs = [], projectiles = [], particles = [], moveTarget = null;
@@ -148,7 +145,7 @@
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
             e.stopPropagation();
             if (gameRunning && !isPaused && ammo > 0) {
-                projectiles.push({ x: player.x, y: player.y - 20 });
+                projectiles.push({ x: player.x, y: player.y - 10 });
                 ammo--; document.getElementById('ammo').innerText = ammo;
             }
         });
@@ -166,7 +163,7 @@
 
             if (moveTarget) {
                 player.x += (moveTarget.x - player.x) * 0.45;
-                player.y += (moveTarget.y - 40 - player.y) * 0.45;
+                player.y += (moveTarget.y - 20 - player.y) * 0.45;
                 player.walkCycle += 0.35;
             }
 
@@ -179,8 +176,8 @@
 
             bombs.forEach((b, i) => {
                 b.y += 5.2 + (score / 2500);
-                const bSize = score < 2500 ? 72 : 90; // Level 1 (FirstOrder) is 20% smaller than 90
-                if (Math.abs(b.x + bSize/2 - player.x) < 45 && Math.abs(b.y + bSize/2 - player.y) < 65) {
+                const bSize = score < 2500 ? 65 : 90; // Decreased Level 1 size
+                if (Math.abs(b.x + bSize/2 - player.x) < 40 && Math.abs(b.y + bSize/2 - player.y) < 55) {
                     gameRunning = false; flashOpacity = 1.0; shake = 30;
                     createExplosion(player.x, player.y);
                     document.getElementById('finalScore').innerText = "SCORE: " + score;
@@ -193,7 +190,7 @@
             projectiles.forEach((proj, bi) => {
                 proj.y -= 12;
                 bombs.forEach((b, mi) => {
-                    const bSize = score < 2500 ? 72 : 90;
+                    const bSize = score < 2500 ? 65 : 90;
                     if (Math.abs(proj.x - (b.x + bSize/2)) < 45 && Math.abs(proj.y - (b.y + bSize/2)) < 45) { 
                         createExplosion(b.x + bSize/2, b.y + bSize/2);
                         bombs.splice(mi, 1); projectiles.splice(bi, 1); 
@@ -218,27 +215,29 @@
             const currentAssets = isLvl1 ? assets.lvl1 : assets.lvl2;
 
             if (gameRunning || isPaused) {
-                // Character Body
                 const sw = Math.sin(player.walkCycle) * 18;
                 ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 5; ctx.lineCap = 'round';
                 ctx.beginPath();
-                ctx.moveTo(player.x, player.y + 10); ctx.lineTo(player.x, player.y + 60); // Torso
-                ctx.moveTo(player.x, player.y + 30); ctx.lineTo(player.x - 25, player.y + 40 + sw); // Arm L
-                ctx.moveTo(player.x, player.y + 30); ctx.lineTo(player.x + 25, player.y + 40 - sw); // Arm R
-                ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x - 15, player.y + 90 + sw); // Leg L
-                ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x + 15, player.y + 90 - sw); // Leg R
+                // Shorter Body Line
+                ctx.moveTo(player.x, player.y + 15); ctx.lineTo(player.x, player.y + 55); 
+                // Arms moved up
+                ctx.moveTo(player.x, player.y + 20); ctx.lineTo(player.x - 25, player.y + 35 + sw); 
+                ctx.moveTo(player.x, player.y + 20); ctx.lineTo(player.x + 25, player.y + 35 - sw); 
+                // Legs
+                ctx.moveTo(player.x, player.y + 55); ctx.lineTo(player.x - 15, player.y + 85 + sw); 
+                ctx.moveTo(player.x, player.y + 55); ctx.lineTo(player.x + 15, player.y + 85 - sw); 
                 ctx.stroke();
-                // Connected Head
-                ctx.drawImage(currentAssets.head, player.x - 35, player.y - 45, 70, 70);
+                // Larger Head moved down (overlap body)
+                ctx.drawImage(currentAssets.head, player.x - 42, player.y - 35, 85, 85);
             }
             
             bombs.forEach(b => {
-                const bSize = isLvl1 ? 72 : 90;
+                const bSize = isLvl1 ? 65 : 90;
                 ctx.drawImage(currentAssets.bomb, b.x, b.y, bSize, bSize);
             });
             
             projectiles.forEach(p => {
-                const aSize = isLvl1 ? 54 : 45; // Bible (Lvl1) is ~20% bigger than Baklava (45)
+                const aSize = isLvl1 ? 60 : 45; // Bible increased
                 ctx.drawImage(currentAssets.ammo, p.x - aSize/2, p.y - aSize/2, aSize, aSize);
             });
             
