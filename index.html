@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <title>Ben Gvir Shooter - Baklava Arcade Game</title>
-    <meta name="description" content="Play Ben Gvir Shooter - The official arcade game. Shoot baklavas, dodge bombs, and compete for the top score!">
+    <title>Ben Gvir Shooter - Arcade Edition</title>
     <link rel="icon" type="image/png" href="baklava.png">
 
     <style>
@@ -16,17 +15,14 @@
         #loginScreen input { padding: 15px; font-size: 18px; border-radius: 8px; margin: 20px 0; width: 80%; max-width: 300px; text-align: center; border: none; }
         #loginScreen button { padding: 15px 40px; font-size: 20px; background: #ffcc00; border: none; border-radius: 8px; font-weight: bold; color: #000; }
         #ui { position: absolute; top: 10px; right: 10px; text-align: right; color: #fff; font-weight: bold; z-index: 10; pointer-events: none; text-shadow: 2px 2px 2px #000; }
+        #levelText { color: #00ffcc; font-size: 14px; }
         .topBtns { position: absolute; top: 15px; left: 15px; display: flex; gap: 10px; z-index: 50; }
         .controlBtn { width: 45px; height: 45px; background: rgba(255,255,255,0.2); border: 2px solid white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: white; cursor: pointer; }
         #fireBtn { position: absolute; bottom: 40px; left: 25px; width: 95px; height: 95px; border-radius: 50%; background: rgba(255, 68, 68, 0.7); border: 3px solid white; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; z-index: 15; font-size: 20px; }
         #gameOver, #pauseOverlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #fff; display: none; z-index: 60; background: rgba(0,0,0,0.95); padding: 20px; border-radius: 20px; border: 4px solid #ff4444; width: 90%; max-width: 400px; }
-        .leaderboard { width: 100%; margin: 15px 0; border-collapse: collapse; font-size: 16px; }
-        .leaderboard td { padding: 8px; border-bottom: 1px solid #333; }
-        .gold { color: #ffcc00; font-weight: bold; }
         .actionBtn { margin: 5px; padding: 12px 25px; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; display: inline-block; }
         #retryBtn { background: #ff4444; color: #fff; }
         #resumeBtn { background: #ffcc00; color: #000; }
-        #shareBtn { background: #25D366; color: #fff; }
     </style>
 </head>
 <body>
@@ -37,9 +33,9 @@
     </div>
 
     <div id="loginScreen">
-        <h1 style="color:#ffcc00;">BEN GVIR SHOOTER</h1>
+        <h1 style="color:#ffcc00;">ARCADE SHOOTER</h1>
         <input type="text" id="usernameInput" placeholder="ENTER NAME..." maxlength="12">
-        <button id="startBtn">PLAY GLOBAL</button>
+        <button id="startBtn">START GAME</button>
     </div>
 
     <div id="pauseOverlay">
@@ -48,6 +44,7 @@
     </div>
 
     <div id="ui">
+        <span id="levelText">LEVEL 1</span><br>
         SCORE: <span id="score">0</span><br>
         <span id="comboText" style="color:#ffcc00; display:none;">COMBO: x<span id="comboVal">1</span></span><br>
         <span style="color:#ffcc00">AMMO: <span id="ammo">3</span></span>
@@ -57,31 +54,34 @@
     <div id="gameOver">
         <h1 style="color: #ff4444;">WASTED</h1>
         <div id="finalScore" style="font-size: 22px; margin: 10px 0;"></div>
-        <h3 style="color:#ffcc00;">GLOBAL TOP 5</h3>
-        <table class="leaderboard"><tbody id="leaderboardBody"><tr><td>Connecting...</td></tr></tbody></table>
-        <div style="display: flex; justify-content: center; flex-wrap: wrap;">
-            <button id="retryBtn" class="actionBtn">RETRY</button>
-            <button id="shareBtn" class="actionBtn">SHARE SCORE</button>
-        </div>
+        <button id="retryBtn" class="actionBtn">RETRY</button>
     </div>
     
     <canvas id="gameCanvas"></canvas>
     
     <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz3JYh1ebRrvFZP0zNVLRcjtfv7wi7dZxMCb0uNOvtj7cSyE8FQVz9Dp_KOzFfg4H45/exec";
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        const headImg = new Image(); headImg.src = 'photo1.png';
-        const baklavaImg = new Image(); baklavaImg.src = 'baklava.png';
-        const bombImg = new Image(); bombImg.src = 'bomb.png';
+        // Asset definitions
+        const assets = {
+            lvl1: { head: new Image(), ammo: new Image(), bomb: new Image() },
+            lvl2: { head: new Image(), ammo: new Image(), bomb: new Image() }
+        };
+        assets.lvl1.head.src = 'GoldK.png';
+        assets.lvl1.ammo.src = 'Bible.png';
+        assets.lvl1.bomb.src = 'FirstOrder.png';
+        
+        assets.lvl2.head.src = 'photo1.png';
+        assets.lvl2.ammo.src = 'baklava.png';
+        assets.lvl2.bomb.src = 'bomb.png';
+
         const failSound = new Audio('fail_sound.mp3');
 
-        let isMuted = false, isPaused = false;
-        let username = "", gameRunning = false, loopId = null;
+        let isMuted = false, isPaused = false, gameRunning = false, loopId = null;
         let score = 0, ammo = 3, totalFrames = 0, flashOpacity = 0, shake = 0;
         let combo = 0, comboTimer = 0;
-        let bombs = [], baklavas = [], particles = [], moveTarget = null;
+        let bombs = [], projectiles = [], particles = [], moveTarget = null;
         const player = { x: 0, y: 0, walkCycle: 0 };
         const BOMB_SIZE = 90;
 
@@ -93,44 +93,15 @@
         window.addEventListener('resize', resize);
         resize();
 
-        document.getElementById('muteBtn').onclick = (e) => {
-            isMuted = !isMuted;
-            document.getElementById('muteBtn').innerText = isMuted ? "🔇" : "🔊";
-            e.stopPropagation();
-        };
-
         function togglePause() {
             if (!gameRunning) return;
             isPaused = !isPaused;
             document.getElementById('pauseOverlay').style.display = isPaused ? 'block' : 'none';
-            document.getElementById('pauseBtn').innerText = isPaused ? "▶" : "⏸";
         }
-        document.getElementById('pauseBtn').onclick = (e) => { togglePause(); e.stopPropagation(); };
+        document.getElementById('pauseBtn').onclick = togglePause;
         document.getElementById('resumeBtn').onclick = togglePause;
 
-        document.getElementById('shareBtn').onclick = () => {
-            const text = `I just scored ${score} in Ben Gvir Shooter! Can you beat me?`;
-            const url = "https://bengvirshooter.com";
-            if (navigator.share) {
-                navigator.share({ title: 'Ben Gvir Shooter', text: text, url: url });
-            } else {
-                window.open(`https://wa.me/?text=${encodeURIComponent(text + " " + url)}`, '_blank');
-            }
-        };
-
-        async function syncGlobalScores(name, finalScore) {
-            const body = document.getElementById('leaderboardBody');
-            try {
-                const response = await fetch(`${SCRIPT_URL}?name=${encodeURIComponent(name)}&score=${finalScore}`);
-                const data = await response.json();
-                body.innerHTML = "";
-                data.forEach((entry, i) => {
-                    body.innerHTML += `<tr class="${i === 0 ? 'gold' : ''}"><td>#${i+1}</td><td>${entry[0]}</td><td>${entry[1]}</td></tr>`;
-                });
-            } catch (err) { body.innerHTML = "<tr><td>Error syncing.</td></tr>"; }
-        }
-
-        function createExplosion(x, y, count = 15, color = '#f40') {
+        function createExplosion(x, y, count = 15) {
             for(let i=0; i<count; i++) {
                 particles.push({
                     x: x, y: y,
@@ -138,7 +109,7 @@
                     vy: (Math.random()-0.5)*15,
                     life: 30,
                     size: Math.random()*5 + 2,
-                    color: i%2===0 ? color : '#fc0'
+                    color: i%2===0 ? '#f40' : '#fc0'
                 });
             }
         }
@@ -146,22 +117,14 @@
         function runGame() {
             if (loopId) cancelAnimationFrame(loopId);
             gameRunning = true; isPaused = false;
-            score = 0; ammo = 3; totalFrames = 0; flashOpacity = 0; shake = 0;
-            combo = 0; comboTimer = 0;
-            bombs = []; baklavas = []; particles = [];
-            document.getElementById('score').innerText = "0";
-            document.getElementById('ammo').innerText = "3";
-            document.getElementById('comboText').style.display = 'none';
+            score = 0; ammo = 3; totalFrames = 0;
+            bombs = []; projectiles = []; particles = [];
             document.getElementById('gameOver').style.display = 'none';
-            document.getElementById('pauseOverlay').style.display = 'none';
             document.getElementById('loginScreen').style.display = 'none';
             gameLoop();
         }
 
-        document.getElementById('startBtn').onclick = () => {
-            username = document.getElementById('usernameInput').value.trim().toUpperCase() || "PLAYER";
-            runGame();
-        };
+        document.getElementById('startBtn').onclick = runGame;
         document.getElementById('retryBtn').onclick = runGame;
 
         canvas.addEventListener('touchstart', (e) => { if(!isPaused) moveTarget = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
@@ -171,28 +134,18 @@
         document.getElementById('fireBtn').addEventListener('touchstart', (e) => {
             e.stopPropagation();
             if (gameRunning && !isPaused && ammo > 0) {
-                baklavas.push({ x: player.x, y: player.y - 20 });
+                projectiles.push({ x: player.x, y: player.y - 20 });
                 ammo--; document.getElementById('ammo').innerText = ammo;
             }
         });
 
-        function triggerDeath() {
-            gameRunning = false; flashOpacity = 1.0; shake = 30;
-            if(!isMuted) failSound.play().catch(()=>{});
-            createExplosion(player.x, player.y, 80);
-            document.getElementById('finalScore').innerText = "SCORE: " + score;
-            document.getElementById('gameOver').style.display = 'block';
-            syncGlobalScores(username, score);
-        }
-
         function update() {
-            if (isPaused) return;
+            if (isPaused || !gameRunning) return;
             if (shake > 0) shake *= 0.85;
             if (flashOpacity > 0) flashOpacity -= 0.04;
             if (comboTimer > 0) comboTimer--; else { combo = 0; document.getElementById('comboText').style.display = 'none'; }
 
             particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.life--; if (p.life <= 0) particles.splice(i, 1); });
-            if (!gameRunning) return;
             
             totalFrames++;
             if (totalFrames % 360 === 0) { ammo++; document.getElementById('ammo').innerText = ammo; }
@@ -203,65 +156,66 @@
                 player.walkCycle += 0.35;
             }
 
+            // Difficulty & Spawning
             let diffMult = Math.pow(1.25, Math.floor(score / 500));
             let spawnRate = Math.max(7, Math.floor(22 / diffMult));
 
             if (totalFrames % spawnRate === 0) {
-                bombs.push({ 
-                    x: Math.random() * (canvas.width - BOMB_SIZE), 
-                    y: -150
-                });
+                bombs.push({ x: Math.random() * (canvas.width - BOMB_SIZE), y: -150 });
             }
 
             bombs.forEach((b, i) => {
                 b.y += 5.2 + (score / 2500);
-                // Accurate collision check (scaled to 90px)
-                if (Math.abs(b.x + BOMB_SIZE/2 - player.x) < 45 && Math.abs(b.y + BOMB_SIZE/2 - player.y) < 65) triggerDeath();
+                if (Math.abs(b.x + BOMB_SIZE/2 - player.x) < 45 && Math.abs(b.y + BOMB_SIZE/2 - player.y) < 65) {
+                    gameRunning = false; flashOpacity = 1.0; shake = 30;
+                    createExplosion(player.x, player.y, 80);
+                    document.getElementById('finalScore').innerText = "SCORE: " + score;
+                    document.getElementById('gameOver').style.display = 'block';
+                }
                 if (b.y > canvas.height) { bombs.splice(i, 1); score += 10; }
             });
 
-            baklavas.forEach((bak, bi) => {
-                bak.y -= 12;
+            projectiles.forEach((proj, bi) => {
+                proj.y -= 12;
                 bombs.forEach((b, mi) => {
-                    // Impact check (scaled to 90px)
-                    if (Math.abs(bak.x - (b.x + BOMB_SIZE/2)) < 45 && Math.abs(bak.y - (b.y + BOMB_SIZE/2)) < 45) { 
+                    if (Math.abs(proj.x - (b.x + BOMB_SIZE/2)) < 45 && Math.abs(proj.y - (b.y + BOMB_SIZE/2)) < 45) { 
                         createExplosion(b.x + BOMB_SIZE/2, b.y + BOMB_SIZE/2, 20);
-                        bombs.splice(mi, 1); baklavas.splice(bi, 1); 
+                        bombs.splice(mi, 1); projectiles.splice(bi, 1); 
                         combo++; comboTimer = 180; shake = 10; score += (100 * combo);
                         document.getElementById('comboVal').innerText = combo;
                         document.getElementById('comboText').style.display = 'block';
                     }
                 });
-                if (bak.y < -20) { baklavas.splice(bi, 1); combo = 0; }
+                if (proj.y < -20) projectiles.splice(bi, 1);
             });
             document.getElementById('score').innerText = score;
+            document.getElementById('levelText').innerText = score < 2500 ? "LEVEL 1" : "LEVEL 2";
         }
 
         function draw() {
             ctx.save();
             if (shake > 1) ctx.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2);
-            
-            let redInt = Math.min(100, score / 100);
-            ctx.fillStyle = `rgb(${61 + redInt}, 51, 41)`; 
+            ctx.fillStyle = score < 2500 ? '#1a1410' : '#2a1a10';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            const currentAssets = score < 2500 ? assets.lvl1 : assets.lvl2;
+
             if (gameRunning || isPaused) {
-                ctx.drawImage(headImg, player.x - 25, player.y - 25, 50, 50);
+                ctx.drawImage(currentAssets.head, player.x - 25, player.y - 25, 50, 50);
                 const sw = Math.sin(player.walkCycle) * 18;
                 ctx.strokeStyle = '#E6B5AC'; ctx.lineWidth = 5; ctx.lineCap = 'round';
                 ctx.beginPath();
                 ctx.moveTo(player.x, player.y + 25); ctx.lineTo(player.x, player.y + 60);
                 ctx.moveTo(player.x, player.y + 40); ctx.lineTo(player.x - 25, player.y + 50 + sw);
                 ctx.moveTo(player.x, player.y + 40); ctx.lineTo(player.x + 25, player.y + 50 - sw);
-                ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x - 15, player.y + 90 + sw);
-                ctx.moveTo(player.x, player.y + 60); ctx.lineTo(player.x + 15, player.y + 90 - sw);
                 ctx.stroke();
             }
-            bombs.forEach(b => {
-                ctx.drawImage(bombImg, b.x, b.y, BOMB_SIZE, BOMB_SIZE);
+            bombs.forEach(b => ctx.drawImage(currentAssets.bomb, b.x, b.y, BOMB_SIZE, BOMB_SIZE));
+            projectiles.forEach(p => ctx.drawImage(currentAssets.ammo, p.x - 22, p.y - 22, 45, 45));
+            particles.forEach(p => { 
+                ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; 
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); 
             });
-            baklavas.forEach(b => ctx.drawImage(baklavaImg, b.x - 22, b.y - 22, 45, 45));
-            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 30; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
             ctx.restore();
             if (flashOpacity > 0) { ctx.fillStyle = `rgba(255,255,255,${flashOpacity})`; ctx.fillRect(0,0,canvas.width, canvas.height); }
         }
